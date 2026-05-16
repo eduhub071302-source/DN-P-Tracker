@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DN P Tracker PRO</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="stylesheet" href="style.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="app-container">
+      <aside class="sidebar" id="appSidebar">
+        <div class="sidebar-inner">
+          <div class="brand">
+            <h2>DN P Tracker <span class="pro-badge">PRO</span></h2>
+          </div>
+
+          <div class="stream-selector">
+            <label><i class="fas fa-graduation-cap"></i> Select Stream</label>
+            <select id="streamSelect">
+              <option value="">-- Choose Stream --</option>
+            </select>
+          </div>
+
+          <div class="pro-menu">
+            <label><i class="fas fa-bolt"></i> Pro Tools</label>
+            <button id="openHistoryBtn" class="side-btn">
+              <i class="fas fa-vault"></i> History Vault
+            </button>
+            <button id="openArchiveBtn" class="side-btn">
+              <i class="fas fa-box-archive"></i> Archive Bucket
+            </button>
+            <button
+              onclick="window.location.href = 'admin.html'"
+              class="side-btn"
+              style="margin-top: 15px; border-color: var(--secondary)"
+            >
+              <i class="fas fa-cogs"></i> Manage Syllabus
+            </button>
+          </div>
+
+          <div id="installPrompt" class="install-card hidden">
+            <div class="install-icon"><i class="fas fa-mobile-alt"></i></div>
+            <p>Install App for the best experience!</p>
+            <button id="installBtn">
+              <i class="fas fa-download"></i> Install Now
+            </button>
+          </div>
+        </div>
+      </aside>
+      <button id="sidebarToggle" class="sidebar-toggle">
+        <i class="fas fa-chevron-left"></i>
+      </button>
+
+      <main class="dashboard" id="mainDashboard">
+        <header class="dashboard-header">
+          <h1>Overview</h1>
+          <p class="date-display" id="currentDate"></p>
+        </header>
+
+        <div class="stats-overview">
+          <div class="stat-card">
+            <i class="fas fa-clock stat-icon"></i>
+            <div class="stat-info">
+              <h3>Total Studied</h3>
+              <p id="totalHoursText">0h 0m</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-calendar-day stat-icon"></i>
+            <div class="stat-info">
+              <h3>Today's Focus</h3>
+              <p id="todayMinsText">0 mins</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <i class="fas fa-fire stat-icon"></i>
+            <div class="stat-info">
+              <h3>Day Streak</h3>
+              <p id="streakText">0 Days</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="main-grid" id="mainGrid">
+          <div class="session-panel card glass" id="sessionPanel">
+            <h3
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+              "
+            >
+              <span><i class="fas fa-book-open"></i> Study Session</span>
+              <button
+                id="toggleSessionBtn"
+                class="icon-btn"
+                style="font-size: 0.9em"
+              >
+                <i class="fas fa-compress-alt"></i>
+              </button>
+            </h3>
+
+            <div id="sessionContent">
+              <div class="input-group">
+                <label>Subject</label>
+                <select id="subjectSelect" disabled>
+                  <option value="">Select Stream First</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label>Topic</label>
+                <select id="topicSelect" disabled>
+                  <option value="">Select Subject First</option>
+                </select>
+              </div>
+
+              <div class="input-group" id="notesSection" style="display: none">
+                <label
+                  >Mini Notes
+                  <span style="font-size: 0.7em; color: var(--text-muted)"
+                    >(Auto-numbered)</span
+                  ></label
+                >
+                <ul id="sessionNotesList" class="mini-notes-list"></ul>
+                <div style="display: flex; gap: 5px; align-items: stretch">
+                  <span id="notePrefix" class="note-prefix">1.</span>
+                  <input
+                    type="text"
+                    id="noteInput"
+                    placeholder="Add a note..."
+                    class="custom-input"
+                  />
+                  <button
+                    id="addNoteBtn"
+                    class="btn primary"
+                    style="padding: 0 15px"
+                  >
+                    <i class="fas fa-plus"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="pomodoro-toggle">
+                <label class="switch">
+                  <input type="checkbox" id="pomodoroToggle" />
+                  <span class="slider round"></span>
+                </label>
+                <span
+                  >Pomodoro:
+                  <input
+                    type="number"
+                    id="pomoTimeInput"
+                    value="25"
+                    min="1"
+                    max="120"
+                    class="custom-input small"
+                  />
+                  m</span
+                >
+              </div>
+            </div>
+
+            <div class="timer-section">
+              <div class="timer-display" id="timeDisplay">00:00:00</div>
+              <div class="controls">
+                <button id="startBtn" class="btn primary">
+                  <i class="fas fa-play"></i> Start
+                </button>
+                <button id="finishBtn" class="btn danger" disabled>
+                  <i class="fas fa-stop"></i> Finish
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="progress-panel card glass">
+            <div class="panel-header-row">
+              <h3
+                style="
+                  border: none;
+                  padding: 0;
+                  margin: 0;
+                  display: flex;
+                  align-items: center;
+                "
+              >
+                <i class="fas fa-chart-line" style="margin-right: 10px"></i>
+                <span id="chartTitle">Study Trends</span>
+                <span class="muted-hint">(Tap points)</span>
+              </h3>
+
+              <div style="display: flex; gap: 10px; align-items: center">
+                <select id="chartTimeframeSelect" class="custom-input">
+                  <option value="7">7 Days</option>
+                  <option value="30">1 Month</option>
+                  <option value="365">1 Year</option>
+                </select>
+                <button
+                  id="resetChartBtn"
+                  class="btn primary hidden"
+                  style="padding: 6px 12px; font-size: 0.8rem"
+                >
+                  <i class="fas fa-undo"></i> Back
+                </button>
+              </div>
+            </div>
+
+            <div class="chart-container">
+              <canvas id="progressChart"></canvas>
+            </div>
+
+            <div id="dailyDetailsPanel" class="daily-details-panel hidden">
+              <div class="panel-header">
+                <h3>
+                  <i class="fas fa-search-plus"></i> Study Log:
+                  <span id="detailDateLabel"></span>
+                </h3>
+                <button id="closeDetailsBtn" class="icon-btn">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div id="dailyDetailsContent" class="details-content"></div>
+            </div>
+
+            <h3 style="margin-top: 20px">
+              <i class="fas fa-bullseye"></i> Subject Mastery
+            </h3>
+            <div id="progressBarsContainer">
+              <p class="placeholder-text">
+                Complete a session to see detailed stats.
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="historyModal" class="modal-overlay hidden">
+      <div class="modal-content glass">
+        <div class="modal-header">
+          <h2><i class="fas fa-vault"></i> History Vault</h2>
+          <button class="icon-btn close-modal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted" style="margin-bottom: 15px">
+            Explore your past study data. Select a week to view its detailed
+            graph.
+          </p>
+          <div id="historyTreeContainer"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="archiveModal" class="modal-overlay hidden">
+      <div class="modal-content glass">
+        <div class="modal-header">
+          <h2><i class="fas fa-box-archive"></i> Archive Bucket</h2>
+          <button class="icon-btn close-modal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="archive-actions" style="margin-bottom: 20px">
+            <button
+              id="btnCreateArchive"
+              class="btn danger"
+              style="width: 100%"
+            >
+              <i class="fas fa-broom"></i> Clear Graph & Move to Archive
+            </button>
+          </div>
+          <h3>Archived Sets</h3>
+          <div id="archiveListContainer">
+            <p class="placeholder-text">No archives found.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .register("sw.js")
+          .then(() => console.log("Service Worker Registered"));
+      }
+    </script>
+  </body>
+</html>

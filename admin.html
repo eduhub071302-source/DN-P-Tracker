@@ -1,0 +1,795 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pro Syllabus Manager - Admin</title>
+    <link rel="stylesheet" href="style.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+
+    <style>
+      /* Pro Admin Specific Styles */
+      .admin-wrapper {
+        padding: 30px;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        /* FIX: Changed from hidden to auto to allow full scrolling */
+        overflow: auto;
+      }
+      .admin-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        background: var(--glass-bg);
+        padding: 15px 25px;
+        border-radius: 16px;
+        border: 1px solid var(--glass-border);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+      }
+      .admin-controls {
+        display: flex;
+        gap: 15px;
+      }
+
+      .admin-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1.5fr;
+        gap: 20px;
+        flex: 1;
+        /* FIX: Allow inner scrolling and enforce a min-width for horizontal sliding */
+        overflow: auto;
+        min-width: 900px;
+      }
+      .admin-col {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        position: relative;
+        /* FIX: Ensures the columns don't squish too much vertically */
+        min-height: 450px;
+      }
+      .col-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 15px;
+        margin-bottom: 10px;
+      }
+      .col-header h3 {
+        font-size: 1.1rem;
+        color: var(--primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .list-container {
+        flex: 1;
+        overflow-y: auto;
+        padding-right: 5px;
+        margin-bottom: 15px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .list-container::-webkit-scrollbar {
+        width: 6px;
+      }
+      .list-container::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+      }
+
+      .list-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 15px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+      }
+      .list-item:hover {
+        background: rgba(255, 255, 255, 0.08);
+        transform: translateX(2px);
+      }
+      .list-item.active {
+        border-color: var(--primary);
+        background: rgba(59, 130, 246, 0.15);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+      }
+
+      .item-name {
+        flex: 1;
+        font-size: 0.95rem;
+        font-weight: 500;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 10px;
+      }
+      .item-badge {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+      }
+      .active .item-badge {
+        background: var(--primary);
+        color: white;
+      }
+
+      .action-btns {
+        display: flex;
+        gap: 8px;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      .list-item:hover .action-btns,
+      .list-item.active .action-btns {
+        opacity: 1;
+      }
+      .icon-btn-small {
+        background: rgba(0, 0, 0, 0.3);
+        border: none;
+        color: var(--text-muted);
+        width: 28px;
+        height: 28px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .icon-btn-small:hover {
+        color: white;
+        background: rgba(255, 255, 255, 0.1);
+      }
+      .icon-btn-small.danger:hover {
+        color: white;
+        background: var(--danger);
+      }
+      .icon-btn-small.edit:hover {
+        color: white;
+        background: var(--success);
+      }
+
+      .input-area {
+        display: flex;
+        gap: 10px;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 10px;
+        border-radius: 10px;
+      }
+
+      .placeholder-col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: var(--text-muted);
+        text-align: center;
+        opacity: 0.5;
+      }
+      .placeholder-col i {
+        font-size: 3rem;
+        margin-bottom: 15px;
+        color: var(--primary);
+      }
+
+      /* Search Bar */
+      .search-bar {
+        width: 100%;
+        padding: 10px 15px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid var(--glass-border);
+        color: white;
+        margin-bottom: 10px;
+        outline: none;
+      }
+      .search-bar:focus {
+        border-color: var(--primary);
+      }
+
+      /* Toast Notification */
+      #toast {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        padding: 15px 25px;
+        border-radius: 10px;
+        color: white;
+        font-weight: 500;
+        transform: translateY(100px);
+        opacity: 0;
+        transition: 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        z-index: 1000;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      #toast.show {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      #toast.success {
+        background: linear-gradient(135deg, var(--success), #059669);
+      }
+      #toast.error {
+        background: linear-gradient(135deg, var(--danger), #dc2626);
+      }
+      #toast.info {
+        background: linear-gradient(135deg, var(--primary), #2563eb);
+      }
+
+      @media (max-width: 1024px) {
+        .admin-layout {
+          grid-template-columns: 1fr;
+          overflow-y: auto;
+          height: auto;
+          min-width: 100%;
+        }
+        .admin-col {
+          height: 500px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="toast">
+      <i class="fas fa-check-circle"></i> <span>Message</span>
+    </div>
+
+    <div id="authOverlay" class="modal-overlay">
+      <div
+        class="modal-content glass"
+        style="max-width: 400px; text-align: center"
+      >
+        <h2 style="color: var(--primary); margin-bottom: 20px">
+          <i class="fas fa-shield-alt"></i> Pro Admin Access
+        </h2>
+        <input
+          type="password"
+          id="adminPwd"
+          class="custom-input"
+          placeholder="Enter System Password"
+        />
+        <button
+          id="loginBtn"
+          class="btn primary"
+          style="width: 100%; margin-top: 15px"
+        >
+          Authenticate
+        </button>
+        <p
+          id="errorMsg"
+          style="
+            color: var(--danger);
+            font-size: 0.9em;
+            margin-top: 10px;
+            display: none;
+          "
+        >
+          Invalid credentials.
+        </p>
+        <button
+          onclick="exitToApp()"
+          class="btn danger"
+          style="width: 100%; margin-top: 10px"
+        >
+          Back to App
+        </button>
+      </div>
+    </div>
+
+    <div class="admin-wrapper hidden" id="adminPanel">
+      <header class="admin-header">
+        <div>
+          <h2 style="margin: 0; font-weight: 600">
+            <i class="fas fa-database text-primary"></i> Master Syllabus Config
+          </h2>
+          <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted)">
+            Manage streams, subjects, and granular topics.
+          </p>
+        </div>
+        <div class="admin-controls">
+          <input
+            type="file"
+            id="importFile"
+            accept=".json"
+            style="display: none"
+          />
+          <button
+            id="importBtn"
+            class="btn"
+            style="background: rgba(255, 255, 255, 0.1)"
+          >
+            <i class="fas fa-file-import"></i> Import Data
+          </button>
+          <button
+            id="exportBtn"
+            class="btn"
+            style="background: rgba(255, 255, 255, 0.1)"
+          >
+            <i class="fas fa-file-export"></i> Export Backup
+          </button>
+          <button id="saveBtn" class="btn success">
+            <i class="fas fa-save"></i> Save & Deploy
+          </button>
+          <button onclick="exitToApp()" class="btn danger">
+            <i class="fas fa-sign-out-alt"></i> Exit
+          </button>
+        </div>
+      </header>
+
+      <div class="admin-layout">
+        <div class="admin-col">
+          <div class="col-header">
+            <h3><i class="fas fa-graduation-cap"></i> Streams</h3>
+          </div>
+          <div class="list-container" id="streamsList"></div>
+          <div class="input-area">
+            <input
+              type="text"
+              id="newStreamInput"
+              class="custom-input"
+              placeholder="Add new stream..."
+            />
+            <button id="addStreamBtn" class="btn primary">
+              <i class="fas fa-plus"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="admin-col" id="subjectCol">
+          <div class="placeholder-col" id="subjectPlaceholder">
+            <i class="fas fa-mouse-pointer"></i>
+            <p>Select a Stream to view Subjects</p>
+          </div>
+          <div
+            id="subjectContent"
+            class="hidden"
+            style="display: flex; flex-direction: column; height: 100%"
+          >
+            <div class="col-header">
+              <h3><i class="fas fa-book"></i> Subjects</h3>
+            </div>
+            <div class="list-container" id="subjectsList"></div>
+            <div class="input-area">
+              <input
+                type="text"
+                id="newSubjectInput"
+                class="custom-input"
+                placeholder="Add new subject..."
+              />
+              <button id="addSubjectBtn" class="btn primary">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="admin-col" id="topicCol">
+          <div class="placeholder-col" id="topicPlaceholder">
+            <i class="fas fa-layer-group"></i>
+            <p>Select a Subject to view Topics</p>
+          </div>
+          <div
+            id="topicContent"
+            class="hidden"
+            style="display: flex; flex-direction: column; height: 100%"
+          >
+            <div class="col-header">
+              <h3><i class="fas fa-list-ul"></i> Topics</h3>
+              <span class="item-badge" id="topicCountBadge">0 Total</span>
+            </div>
+            <input
+              type="text"
+              id="topicSearch"
+              class="search-bar"
+              placeholder="Search topics..."
+            />
+            <div class="list-container" id="topicsList"></div>
+            <div class="input-area">
+              <input
+                type="text"
+                id="newTopicInput"
+                class="custom-input"
+                placeholder="Add new topic..."
+              />
+              <button id="addTopicBtn" class="btn primary">
+                <i class="fas fa-plus"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // --- Smooth Exit Function ---
+      function exitToApp() {
+        document.body.style.transition = "opacity 0.4s ease";
+        document.body.style.opacity = "0";
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 400);
+      }
+
+      // --- Authentication Logic ---
+      const TARGET_PWD = "##!!kushidinu270813!!##";
+      const authOverlay = document.getElementById("authOverlay");
+      const adminPanel = document.getElementById("adminPanel");
+      const pwdInput = document.getElementById("adminPwd");
+
+      document.getElementById("loginBtn").addEventListener("click", () => {
+        if (pwdInput.value === TARGET_PWD) {
+          authOverlay.classList.add("hidden");
+          adminPanel.classList.remove("hidden");
+          renderStreams();
+        } else {
+          document.getElementById("errorMsg").style.display = "block";
+          pwdInput.style.borderColor = "var(--danger)";
+        }
+      });
+      pwdInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") document.getElementById("loginBtn").click();
+      });
+
+      // --- Data Management & State ---
+      let appData = JSON.parse(localStorage.getItem("dnp_appData")) || {
+        streams: {},
+      };
+      let currentStream = null;
+      let currentSubject = null;
+
+      // Toast Utility
+      function showToast(message, type = "info") {
+        const toast = document.getElementById("toast");
+        toast.className = `show ${type}`;
+        toast.innerHTML = `<i class="fas ${type === "success" ? "fa-check-circle" : type === "error" ? "fa-exclamation-triangle" : "fa-info-circle"}"></i> <span>${message}</span>`;
+        setTimeout(() => toast.classList.remove("show"), 3000);
+      }
+
+      // --- Render Functions ---
+      function renderStreams() {
+        const list = document.getElementById("streamsList");
+        list.innerHTML = "";
+
+        Object.keys(appData.streams).forEach((streamName) => {
+          let count = Object.keys(appData.streams[streamName].subjects).length;
+          let isActive = streamName === currentStream ? "active" : "";
+
+          let div = document.createElement("div");
+          div.className = `list-item ${isActive}`;
+          div.onclick = () => selectStream(streamName);
+          div.innerHTML = `
+            <div class="item-name" title="${streamName}">${streamName}</div>
+            <div class="item-badge">${count}</div>
+            <div class="action-btns" onclick="event.stopPropagation()">
+                <button class="icon-btn-small edit" onclick="renameStream('${streamName}')"><i class="fas fa-pen"></i></button>
+                <button class="icon-btn-small danger" onclick="deleteStream('${streamName}')"><i class="fas fa-trash"></i></button>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+
+        if (!currentStream || !appData.streams[currentStream])
+          resetSubjectPanel();
+      }
+
+      function selectStream(streamName) {
+        currentStream = streamName;
+        currentSubject = null; // reset lower hierarchy
+        renderStreams(); // to update active class
+
+        document.getElementById("subjectPlaceholder").classList.add("hidden");
+        document.getElementById("subjectContent").classList.remove("hidden");
+        resetTopicPanel();
+        renderSubjects();
+      }
+
+      function renderSubjects() {
+        const list = document.getElementById("subjectsList");
+        list.innerHTML = "";
+        if (!currentStream || !appData.streams[currentStream]) return;
+
+        let subjects = appData.streams[currentStream].subjects;
+        Object.keys(subjects).forEach((subName) => {
+          let count = subjects[subName].length;
+          let isActive = subName === currentSubject ? "active" : "";
+
+          let div = document.createElement("div");
+          div.className = `list-item ${isActive}`;
+          div.onclick = () => selectSubject(subName);
+          div.innerHTML = `
+            <div class="item-name" title="${subName}">${subName}</div>
+            <div class="item-badge">${count}</div>
+            <div class="action-btns" onclick="event.stopPropagation()">
+                <button class="icon-btn-small edit" onclick="renameSubject('${subName}')"><i class="fas fa-pen"></i></button>
+                <button class="icon-btn-small danger" onclick="deleteSubject('${subName}')"><i class="fas fa-trash"></i></button>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+      }
+
+      function selectSubject(subName) {
+        currentSubject = subName;
+        renderSubjects(); // update active class
+
+        document.getElementById("topicPlaceholder").classList.add("hidden");
+        document.getElementById("topicContent").classList.remove("hidden");
+        renderTopics();
+      }
+
+      function renderTopics(filter = "") {
+        const list = document.getElementById("topicsList");
+        list.innerHTML = "";
+        if (
+          !currentStream ||
+          !currentSubject ||
+          !appData.streams[currentStream].subjects[currentSubject]
+        )
+          return;
+
+        let topics = appData.streams[currentStream].subjects[currentSubject];
+        document.getElementById("topicCountBadge").textContent =
+          `${topics.length} Total`;
+
+        topics.forEach((topic, idx) => {
+          if (filter && !topic.toLowerCase().includes(filter.toLowerCase()))
+            return;
+
+          let div = document.createElement("div");
+          div.className = "list-item";
+          div.style.cursor = "default";
+          div.innerHTML = `
+            <div class="item-name" title="${topic}" style="white-space: normal;">${topic}</div>
+            <div class="action-btns">
+                <button class="icon-btn-small edit" onclick="renameTopic(${idx})"><i class="fas fa-pen"></i></button>
+                <button class="icon-btn-small danger" onclick="deleteTopic(${idx})"><i class="fas fa-trash"></i></button>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+      }
+
+      function resetSubjectPanel() {
+        document
+          .getElementById("subjectPlaceholder")
+          .classList.remove("hidden");
+        document.getElementById("subjectContent").classList.add("hidden");
+        currentStream = null;
+        resetTopicPanel();
+      }
+      function resetTopicPanel() {
+        document.getElementById("topicPlaceholder").classList.remove("hidden");
+        document.getElementById("topicContent").classList.add("hidden");
+        currentSubject = null;
+        document.getElementById("topicSearch").value = "";
+      }
+
+      // --- Add / Edit / Delete Actions ---
+
+      // Streams
+      document.getElementById("addStreamBtn").addEventListener("click", () => {
+        let val = document.getElementById("newStreamInput").value.trim();
+        if (val && !appData.streams[val]) {
+          appData.streams[val] = { subjects: {} };
+          document.getElementById("newStreamInput").value = "";
+          showToast("Stream created", "success");
+          renderStreams();
+        } else if (appData.streams[val]) {
+          showToast("Stream already exists!", "error");
+        }
+      });
+      document
+        .getElementById("newStreamInput")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter")
+            document.getElementById("addStreamBtn").click();
+        });
+
+      window.deleteStream = (name) => {
+        if (
+          confirm(
+            `Warning: Deleting Stream "${name}" will destroy all its subjects and topics. Proceed?`,
+          )
+        ) {
+          delete appData.streams[name];
+          if (currentStream === name) resetSubjectPanel();
+          showToast("Stream deleted", "info");
+          renderStreams();
+        }
+      };
+
+      window.renameStream = (oldName) => {
+        let newName = prompt("Rename Stream:", oldName);
+        if (newName && newName.trim() !== oldName) {
+          newName = newName.trim();
+          if (appData.streams[newName])
+            return showToast("Name already exists!", "error");
+
+          // Maintain object integrity
+          appData.streams[newName] = appData.streams[oldName];
+          delete appData.streams[oldName];
+          if (currentStream === oldName) currentStream = newName;
+          renderStreams();
+          if (currentStream) renderSubjects();
+          showToast("Stream renamed", "success");
+        }
+      };
+
+      // Subjects
+      document.getElementById("addSubjectBtn").addEventListener("click", () => {
+        let val = document.getElementById("newSubjectInput").value.trim();
+        if (
+          val &&
+          currentStream &&
+          !appData.streams[currentStream].subjects[val]
+        ) {
+          appData.streams[currentStream].subjects[val] = [];
+          document.getElementById("newSubjectInput").value = "";
+          renderStreams(); // Update count
+          renderSubjects();
+          showToast("Subject added", "success");
+        }
+      });
+      document
+        .getElementById("newSubjectInput")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter")
+            document.getElementById("addSubjectBtn").click();
+        });
+
+      window.deleteSubject = (name) => {
+        if (confirm(`Delete subject "${name}" and all its topics?`)) {
+          delete appData.streams[currentStream].subjects[name];
+          if (currentSubject === name) resetTopicPanel();
+          renderStreams(); // Update count
+          renderSubjects();
+          showToast("Subject deleted", "info");
+        }
+      };
+
+      window.renameSubject = (oldName) => {
+        let newName = prompt("Rename Subject:", oldName);
+        if (newName && newName.trim() !== oldName) {
+          newName = newName.trim();
+          if (appData.streams[currentStream].subjects[newName])
+            return showToast("Subject already exists!", "error");
+
+          appData.streams[currentStream].subjects[newName] =
+            appData.streams[currentStream].subjects[oldName];
+          delete appData.streams[currentStream].subjects[oldName];
+          if (currentSubject === oldName) currentSubject = newName;
+          renderSubjects();
+          if (currentSubject) renderTopics();
+          showToast("Subject renamed", "success");
+        }
+      };
+
+      // Topics
+      document.getElementById("addTopicBtn").addEventListener("click", () => {
+        let val = document.getElementById("newTopicInput").value.trim();
+        if (val && currentSubject) {
+          appData.streams[currentStream].subjects[currentSubject].push(val);
+          document.getElementById("newTopicInput").value = "";
+          renderSubjects(); // Update count
+          renderTopics();
+          showToast("Topic added", "success");
+        }
+      });
+      document
+        .getElementById("newTopicInput")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter") document.getElementById("addTopicBtn").click();
+        });
+
+      window.deleteTopic = (idx) => {
+        appData.streams[currentStream].subjects[currentSubject].splice(idx, 1);
+        renderSubjects(); // Update count
+        renderTopics();
+      };
+
+      window.renameTopic = (idx) => {
+        let oldName =
+          appData.streams[currentStream].subjects[currentSubject][idx];
+        let newName = prompt("Edit Topic:", oldName);
+        if (newName && newName.trim() && newName.trim() !== oldName) {
+          appData.streams[currentStream].subjects[currentSubject][idx] =
+            newName.trim();
+          renderTopics();
+          showToast("Topic updated", "success");
+        }
+      };
+
+      // Search Logic
+      document.getElementById("topicSearch").addEventListener("input", (e) => {
+        renderTopics(e.target.value);
+      });
+
+      // --- Pro File Sync (Import/Export) ---
+      document.getElementById("exportBtn").addEventListener("click", () => {
+        const dataStr = JSON.stringify(appData, null, 2);
+        const blob = new Blob([dataStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `Syllabus_Backup_${new Date().toISOString().split("T")[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast("Backup exported successfully", "success");
+      });
+
+      document.getElementById("importBtn").addEventListener("click", () => {
+        document.getElementById("importFile").click();
+      });
+
+      document.getElementById("importFile").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const importedData = JSON.parse(event.target.result);
+            if (!importedData.streams) throw new Error("Invalid Format");
+
+            if (
+              confirm(
+                "Warning: Importing will overwrite your current configuration. Proceed?",
+              )
+            ) {
+              appData = importedData;
+              currentStream = null;
+              currentSubject = null;
+              renderStreams();
+              showToast("Data imported successfully!", "success");
+            }
+          } catch (err) {
+            showToast("Error: Invalid JSON file structure.", "error");
+          }
+          e.target.value = ""; // reset file input
+        };
+        reader.readAsText(file);
+      });
+
+      // --- Save & Exit ---
+      document.getElementById("saveBtn").addEventListener("click", () => {
+        localStorage.setItem("dnp_appData", JSON.stringify(appData));
+        showToast("Configuration Saved & Deployed to Main App!", "success");
+
+        // Smooth transition out after saving
+        document.body.style.transition = "opacity 0.4s ease";
+        document.body.style.opacity = "0";
+        setTimeout(() => {
+          window.location.href = "index.html";
+        }, 1200);
+      });
+    </script>
+  </body>
+</html>
