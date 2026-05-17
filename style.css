@@ -818,7 +818,7 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
   }
 }
 
-/* Mobile Entry Setup */
+/* Mobile Entry Setup - EDITED TO FIX SCROLLING OVERFLOW */
 .mobile-entry-overlay {
   display: none;
 }
@@ -834,7 +834,15 @@ input[type="month"]::-webkit-calendar-picker-indicator:hover {
     display: flex;
     justify-content: center;
     align-items: center;
+    padding: 20px; /* Provides edge-spacing so the box doesn't touch the screen bounds */
   }
+  
+  /* Added to allow internal scrolling if the content is taller than the viewport */
+  .mobile-entry-overlay .glass {
+    max-height: 95vh;
+    overflow-y: auto;
+  }
+  
   .pc-only {
     display: none !important;
   }
