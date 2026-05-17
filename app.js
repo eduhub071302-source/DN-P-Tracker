@@ -95,25 +95,20 @@ const defaultStreams = {
   },
 };
 
-// Initialize App Data securely mapping to localStorage so Admin updates immediately reflect here
+// Initialize App Data securely
 let appData = JSON.parse(localStorage.getItem("dnp_appData"));
-
-// Detection logic to force-update if the user still has the old short list in local storage
 let needsUpdate = false;
 if (appData && appData.streams && appData.streams["Biology Science"]) {
-  if (appData.streams["Biology Science"].subjects.Biology.length <= 3) {
+  if (appData.streams["Biology Science"].subjects.Biology.length <= 3)
     needsUpdate = true;
-  }
 }
-
 if (!appData || !appData.streams || needsUpdate) {
   appData = { streams: defaultStreams };
   localStorage.setItem("dnp_appData", JSON.stringify(appData));
 }
-
 const streams = appData.streams;
 
-// DOM Elements
+// --- DOM Elements ---
 const streamSelect = document.getElementById("streamSelect");
 const subjectSelect = document.getElementById("subjectSelect");
 const topicSelect = document.getElementById("topicSelect");
@@ -130,7 +125,7 @@ const toggleSessionBtn = document.getElementById("toggleSessionBtn");
 const sessionContent = document.getElementById("sessionContent");
 const mainGrid = document.getElementById("mainGrid");
 const chartTimeframeSelect = document.getElementById("chartTimeframeSelect");
-const mainDashboard = document.getElementById("mainDashboard"); // For drag scroll
+const mainDashboard = document.getElementById("mainDashboard");
 
 const notesSection = document.getElementById("notesSection");
 const sessionNotesList = document.getElementById("sessionNotesList");
@@ -138,7 +133,20 @@ const noteInput = document.getElementById("noteInput");
 const addNoteBtn = document.getElementById("addNoteBtn");
 const notePrefix = document.getElementById("notePrefix");
 
-// State
+const totalTimeFilter = document.getElementById("totalTimeFilter");
+
+// Custom Anchor Inputs
+const anchor7DayInput = document.getElementById("anchor7Day");
+const anchor1MonthInput = document.getElementById("anchor1Month");
+const anchor1YearInput = document.getElementById("anchor1Year");
+
+// --- Sound Effect ---
+const loudAlarmSound = new Audio(
+  "https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg",
+);
+loudAlarmSound.volume = 1.0;
+
+// --- State ---
 let timerInterval;
 let secondsElapsed = 0;
 let defaultPomoMins = parseInt(pomoTimeInput.value) || 25;
@@ -149,6 +157,7 @@ let currentTopic = "";
 let chartInstance = null;
 let customHistoricalDates = null;
 let currentSessionNotes = [];
+let deferredPrompt; // For PWA installation
 
 document.getElementById("currentDate").textContent =
   new Date().toLocaleDateString("en-US", {
@@ -158,7 +167,7 @@ document.getElementById("currentDate").textContent =
     day: "numeric",
   });
 
-// Populate Stream Dropdown dynamically
+// Populate Dropdown
 Object.keys(streams).forEach((streamName) => {
   let opt = document.createElement("option");
   opt.value = streamName;
@@ -166,15 +175,502 @@ Object.keys(streams).forEach((streamName) => {
   streamSelect.appendChild(opt);
 });
 
-// UI Toggles Implementations (With Chart Resize Fix added)
+// --- PWA Installation Logic ---
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+});
+
+function handleInstallClick() {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult) => {
+      if (choiceResult.outcome === "accepted") {
+        console.log("User accepted the install prompt");
+        // Handled by CSS automatically (hides buttons when installed)
+      }
+      deferredPrompt = null;
+    });
+  } else {
+    alert(
+      "Automatic install prompt is not available right now. You can install the app manually via your browser's menu (e.g., 'Add to Home Screen' or 'Install App'). Ensure you are running on an HTTPS connection.",
+    );
+  }
+}
+
+document
+  .getElementById("installBtn")
+  .addEventListener("click", handleInstallClick);
+document
+  .getElementById("mobileInstallBtn")
+  .addEventListener("click", handleInstallClick);
+
+// --- Mobile Immersive Mode ---
+document
+  .getElementById("btnEnterImmersive")
+  .addEventListener("click", async () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        await document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) {
+        await document.documentElement.msRequestFullscreen();
+      }
+      if (screen.orientation && screen.orientation.lock) {
+        await screen.orientation.lock("landscape");
+      }
+    } catch (err) {
+      console.log(
+        "Fullscreen/Orientation lock API error (expected on iOS):",
+        err,
+      );
+    }
+    document.body.classList.add("immersive-active");
+    setTimeout(() => {
+      if (chartInstance) chartInstance.resize();
+    }, 500);
+  });
+
+// --- Ambient Sounds Logic ---
+const soundBtns = document.querySelectorAll(".sound-btn");
+soundBtns.forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    const soundType = e.currentTarget.dataset.sound;
+    const audioEl = document.getElementById(`audio-${soundType}`);
+
+    if (e.currentTarget.classList.contains("active")) {
+      audioEl.pause();
+      e.currentTarget.classList.remove("active");
+    } else {
+      document
+        .querySelectorAll('audio[id^="audio-"]')
+        .forEach((a) => a.pause());
+      soundBtns.forEach((b) => b.classList.remove("active"));
+      audioEl.volume = 0.5;
+      audioEl.play().catch((err) => console.log("Audio play blocked", err));
+      e.currentTarget.classList.add("active");
+    }
+  });
+});
+
+// --- User Profile & Motivation Engine ---
+const settingsModal = document.getElementById("settingsModal");
+const motivationModal = document.getElementById("motivationModal");
+const userNicknameInput = document.getElementById("userNickname");
+const userExamDateInput = document.getElementById("userExamDate");
+
+function loadUserProfile() {
+  const profile = JSON.parse(localStorage.getItem("dnp_userProfile"));
+  const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
+
+  // Fill and lock anchor inputs if they were set previously
+  if (anchors.sevenDayStart) {
+    anchor7DayInput.value = anchors.sevenDayStart;
+    anchor7DayInput.disabled = true;
+  }
+  if (anchors.oneMonthStart) {
+    anchor1MonthInput.value = anchors.oneMonthStart;
+    anchor1MonthInput.disabled = true;
+  }
+  if (anchors.oneYearStart) {
+    anchor1YearInput.value = anchors.oneYearStart;
+    anchor1YearInput.disabled = true;
+  }
+
+  if (!profile || !profile.nickname || !profile.examDate) {
+    settingsModal.classList.remove("hidden");
+    settingsModal.onclick = (e) => e.stopPropagation();
+  } else {
+    showMotivationPopup(profile);
+  }
+}
+
+document.getElementById("openSettingsBtn").addEventListener("click", () => {
+  const profile = JSON.parse(localStorage.getItem("dnp_userProfile")) || {};
+  if (profile.nickname) userNicknameInput.value = profile.nickname;
+  if (profile.examDate) userExamDateInput.value = profile.examDate;
+  settingsModal.classList.remove("hidden");
+});
+
+document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+  const nickname = userNicknameInput.value.trim();
+  const examDate = userExamDateInput.value;
+
+  if (!nickname || !examDate) {
+    alert("Please fill in both your nickname and exam date to continue!");
+    return;
+  }
+
+  // Handle Custom Anchors Save
+  const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
+  let anchorsChanged = false;
+
+  if (!anchors.sevenDayStart && anchor7DayInput.value) {
+    anchors.sevenDayStart = anchor7DayInput.value;
+    anchor7DayInput.disabled = true;
+    anchorsChanged = true;
+  }
+  if (!anchors.oneMonthStart && anchor1MonthInput.value) {
+    anchors.oneMonthStart = anchor1MonthInput.value;
+    anchor1MonthInput.disabled = true;
+    anchorsChanged = true;
+  }
+  if (!anchors.oneYearStart && anchor1YearInput.value) {
+    anchors.oneYearStart = anchor1YearInput.value;
+    anchor1YearInput.disabled = true;
+    anchorsChanged = true;
+  }
+
+  if (anchorsChanged) {
+    localStorage.setItem("dnp_customAnchors", JSON.stringify(anchors));
+    updateDashboardUI(); // Refresh charts to apply newly set anchors
+  }
+
+  const profile = { nickname, examDate };
+  localStorage.setItem("dnp_userProfile", JSON.stringify(profile));
+  settingsModal.classList.add("hidden");
+  showMotivationPopup(profile);
+});
+
+document.getElementById("closeMotivationBtn").addEventListener("click", () => {
+  motivationModal.classList.add("hidden");
+});
+
+function showMotivationPopup(profile) {
+  const examDate = new Date(profile.examDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  examDate.setHours(0, 0, 0, 0);
+
+  const diffTime = examDate - today;
+  const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  const motHeadline = document.getElementById("motHeadline");
+  const motBody = document.getElementById("motBody");
+  const motEmoji = document.getElementById("motEmoji");
+
+  const intros = [
+    `Listen up, ${profile.nickname}!`,
+    `Reality check, ${profile.nickname}.`,
+    `Hey ${profile.nickname},`,
+    `Focus up, ${profile.nickname}!`,
+    `It's time, ${profile.nickname}.`,
+    `Look here, ${profile.nickname}.`,
+    `Wake up, ${profile.nickname}!`,
+    `Stay hard, ${profile.nickname}.`,
+    `Yo ${profile.nickname}!`,
+    `Champion mindset, ${profile.nickname}.`,
+  ];
+
+  const middleFar = [
+    "Every single hour you put in today is a brick in the foundation of your future.",
+    "The pain of discipline is nothing compared to the pain of regret.",
+    "Your competitors are studying right now. Are you going to let them win?",
+    "You didn't come this far to only come this far.",
+    "Greatness is forged in the silent hours of relentless work.",
+    "The exam won't care how tired you were. It only cares if you're ready.",
+    "Motivation gets you going, but raw discipline keeps you growing.",
+    "Small consistent steps turn into massive leaps.",
+    "Don't stop when you're tired. Stop when you're done.",
+    "You are capable of doing incredibly hard things.",
+  ];
+
+  const endings = [
+    "Let's crush today! 💥",
+    "Time to grind. 🚀",
+    "Make it happen. 🎯",
+    "No excuses. 🚫",
+    "Go get what's yours! 🏆",
+    "Lock in! 🔒",
+    "Dominate this session. ⚡",
+    "Prove yourself right. 🌟",
+    "Execute. ⚔️",
+    "Win the day! 🏁",
+  ];
+
+  const emojis = ["🔥", "🚀", "⚔️", "🧠", "🎯", "⚡", "🏆", "🌟", "💪", "👑"];
+
+  let headline = "";
+  let bodyText = "";
+
+  if (daysLeft < 0) {
+    headline = "The Exam is Over!";
+    bodyText = `Hope you crushed it, ${profile.nickname}! Update your settings for the next milestone.`;
+    motEmoji.innerText = "🎉";
+  } else if (daysLeft === 0) {
+    headline = "IT'S GAME DAY!";
+    bodyText = `This is it, ${profile.nickname}. You've trained for this. Take a deep breath, trust your preparation, and go destroy that exam!`;
+    motEmoji.innerText = "🏆";
+  } else {
+    headline = `Only ${daysLeft} Days Left!`;
+    const rIntro = intros[Math.floor(Math.random() * intros.length)];
+    const rMid = middleFar[Math.floor(Math.random() * middleFar.length)];
+    const rEnd = endings[Math.floor(Math.random() * endings.length)];
+    bodyText = `${rIntro} ${rMid} ${rEnd}`;
+    motEmoji.innerText = emojis[Math.floor(Math.random() * emojis.length)];
+  }
+
+  motHeadline.textContent = headline;
+  motBody.textContent = bodyText;
+  motivationModal.classList.remove("hidden");
+}
+
+window.addEventListener("DOMContentLoaded", loadUserProfile);
+
+// --- Share & Download PDF Feature ---
+async function generateReportPDF() {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF("p", "mm", "a4");
+
+  const profile = JSON.parse(localStorage.getItem("dnp_userProfile")) || {
+    nickname: "Student",
+  };
+
+  const timeframeDropdown = document.getElementById("chartTimeframeSelect");
+  const timeframeText =
+    timeframeDropdown.options[timeframeDropdown.selectedIndex].text;
+  const timeframeLabel = customHistoricalDates
+    ? "History Vault View"
+    : timeframeText;
+  const fileName = `Study_Report_${profile.nickname}_${timeframeLabel.replace(/ /g, "")}.pdf`;
+
+  pdf.setFontSize(22);
+  pdf.setTextColor(59, 130, 246);
+  pdf.text("DN P Tracker PRO - Study Report", 14, 20);
+
+  pdf.setFontSize(12);
+  pdf.setTextColor(80, 80, 80);
+  pdf.text(`Student: ${profile.nickname}`, 14, 30);
+  pdf.text(`Report Period: ${timeframeLabel}`, 14, 36);
+  pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 42);
+
+  let currentY = 55;
+
+  if (chartInstance) {
+    pdf.setFontSize(14);
+    pdf.setTextColor(40, 40, 40);
+    pdf.text("Study Trends Overview", 14, currentY);
+    currentY += 5;
+
+    const currentCanvas = chartInstance.canvas;
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = currentCanvas.offsetWidth || 800;
+    tempCanvas.height = currentCanvas.offsetHeight || 250;
+
+    const tempChart = new Chart(tempCanvas.getContext("2d"), {
+      type: chartInstance.config.type,
+      data: chartInstance.config.data,
+      options: {
+        ...chartInstance.config.options,
+        animation: false,
+        responsive: false,
+        devicePixelRatio: 4,
+      },
+    });
+
+    const chartImage = tempChart.toBase64Image("image/png", 1.0);
+    tempChart.destroy();
+
+    const imgProps = pdf.getImageProperties(chartImage);
+    const pdfWidth = pdf.internal.pageSize.getWidth() - 28;
+    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+
+    pdf.setFillColor(15, 23, 42);
+    pdf.rect(14, currentY, pdfWidth, pdfHeight, "F");
+
+    pdf.addImage(chartImage, "PNG", 14, currentY, pdfWidth, pdfHeight);
+    currentY += pdfHeight + 15;
+  }
+
+  if (currentY > 200) {
+    pdf.addPage();
+    currentY = 20;
+  }
+
+  pdf.setFontSize(18);
+  pdf.setTextColor(59, 130, 246);
+  pdf.text("Detailed Study Log Breakdown", 14, currentY);
+  currentY += 10;
+
+  const dailyDetailed =
+    JSON.parse(localStorage.getItem("dnp_daily_detailed")) || {};
+  let activeDates = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // PDF Boundary Check aligned with custom anchors
+  if (customHistoricalDates) {
+    activeDates = customHistoricalDates;
+  } else {
+    const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
+    let startBoundary = null;
+    let endBoundary = null;
+
+    if (timeframeDropdown.value === "7" && anchors.sevenDayStart) {
+      startBoundary = new Date(anchors.sevenDayStart);
+      endBoundary = new Date(startBoundary);
+      endBoundary.setDate(endBoundary.getDate() + 6);
+    } else if (timeframeDropdown.value === "30" && anchors.oneMonthStart) {
+      startBoundary = new Date(anchors.oneMonthStart);
+      endBoundary = new Date(startBoundary);
+      endBoundary.setDate(endBoundary.getDate() + 29);
+    } else if (timeframeDropdown.value === "365" && anchors.oneYearStart) {
+      startBoundary = new Date(anchors.oneYearStart + "-01");
+      endBoundary = new Date(startBoundary);
+      endBoundary.setFullYear(endBoundary.getFullYear() + 1);
+      endBoundary.setDate(endBoundary.getDate() - 1);
+    } else {
+      let days =
+        timeframeDropdown.value === "365"
+          ? 365
+          : parseInt(timeframeDropdown.value);
+      endBoundary = today;
+      startBoundary = new Date();
+      startBoundary.setDate(startBoundary.getDate() - days + 1);
+    }
+
+    for (let dateStr in dailyDetailed) {
+      const d = new Date(dateStr);
+      d.setHours(0, 0, 0, 0);
+      if (d >= startBoundary && d <= endBoundary) {
+        activeDates.push(dateStr);
+      }
+    }
+  }
+
+  activeDates.sort((a, b) => new Date(a) - new Date(b));
+
+  if (activeDates.length === 0) {
+    pdf.setFontSize(12);
+    pdf.setTextColor(100, 100, 100);
+    pdf.text("No study data recorded for this timeframe.", 14, currentY);
+  } else {
+    for (let dateStr of activeDates) {
+      const dayData = dailyDetailed[dateStr];
+      if (!dayData || Object.keys(dayData).length === 0) continue;
+
+      let tableBody = [];
+      for (const [subject, data] of Object.entries(dayData)) {
+        for (const [topic, topicData] of Object.entries(data.topics)) {
+          let timeSec =
+            typeof topicData === "number" ? topicData : topicData.time;
+          let mins = Math.round(timeSec / 60);
+          if (mins === 0 && timeSec > 0) mins = "<1";
+
+          let notes =
+            typeof topicData === "object" &&
+            topicData.notes &&
+            topicData.notes.length > 0
+              ? topicData.notes.map((n, i) => `${i + 1}. ${n}`).join("\n")
+              : "-";
+
+          tableBody.push([subject, topic, `${mins} mins`, notes]);
+        }
+      }
+
+      if (tableBody.length > 0) {
+        const niceDate = new Date(dateStr).toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        });
+
+        if (currentY > 270) {
+          pdf.addPage();
+          currentY = 20;
+        }
+
+        pdf.setFontSize(13);
+        pdf.setTextColor(40, 40, 40);
+        pdf.text(niceDate, 14, currentY);
+        currentY += 4;
+
+        pdf.autoTable({
+          startY: currentY,
+          head: [["Subject", "Topic", "Duration", "Notes"]],
+          body: tableBody,
+          theme: "grid",
+          headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255] },
+          styles: { fontSize: 9, cellPadding: 4 },
+          columnStyles: {
+            0: { cellWidth: 35 },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: "auto" },
+          },
+          margin: { bottom: 20 },
+        });
+
+        currentY = pdf.lastAutoTable.finalY + 12;
+      }
+    }
+  }
+
+  const pdfBlob = pdf.output("blob");
+  return { pdf, pdfBlob, fileName, profile, timeframe: timeframeLabel };
+}
+
+document.getElementById("sharePdfBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("sharePdfBtn");
+  const originalText = btn.innerHTML;
+  btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Generating...`;
+  btn.disabled = true;
+
+  try {
+    const { pdf, pdfBlob, fileName, profile, timeframe } =
+      await generateReportPDF();
+    const file = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({
+        title: `${profile.nickname}'s Study Progress`,
+        text: `Check out my ${timeframe} study progress report from DN P Tracker Pro! 🔥`,
+        files: [file],
+      });
+    } else {
+      pdf.save(fileName);
+      alert(
+        "Your browser does not support direct sharing. The PDF report has been downloaded to your device instead.",
+      );
+    }
+  } catch (err) {
+    console.error("PDF Generation Error:", err);
+    alert("Failed to generate the PDF report. Please try again.");
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+});
+
+document
+  .getElementById("downloadPdfBtn")
+  .addEventListener("click", async () => {
+    const btn = document.getElementById("downloadPdfBtn");
+    const originalText = btn.innerHTML;
+    btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Downloading...`;
+    btn.disabled = true;
+
+    try {
+      const { pdf, fileName } = await generateReportPDF();
+      pdf.save(fileName);
+    } catch (err) {
+      console.error("PDF Generation Error:", err);
+      alert("Failed to download the PDF report. Please try again.");
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  });
+
+// UI Toggles
 sidebarToggle.addEventListener("click", () => {
   appSidebar.classList.toggle("collapsed");
   sidebarToggle.classList.toggle("collapsed");
   sidebarToggle.innerHTML = appSidebar.classList.contains("collapsed")
     ? '<i class="fas fa-chevron-right"></i>'
     : '<i class="fas fa-chevron-left"></i>';
-
-  // Wait for 0.3s CSS transition to complete, then resize chart
   setTimeout(() => {
     if (chartInstance) chartInstance.resize();
   }, 300);
@@ -187,28 +683,25 @@ toggleSessionBtn.addEventListener("click", () => {
   toggleSessionBtn.innerHTML = isHidden
     ? '<i class="fas fa-expand-alt"></i>'
     : '<i class="fas fa-compress-alt"></i>';
-
-  // Wait for 0.3s CSS transition to complete, then resize chart
   setTimeout(() => {
     if (chartInstance) chartInstance.resize();
   }, 300);
 });
 
-// --- PRO FEATURE: DRAG TO SCROLL (Up/Down/Left/Right) ---
+// Drag to Scroll
 let isDragging = false;
 let startX, startY, scrollLeft, scrollTop;
 
 mainDashboard.addEventListener("mousedown", (e) => {
-  // Prevent dragging if clicking interactable elements
   if (
     ["INPUT", "BUTTON", "SELECT", "CANVAS", "A", "LI", "LABEL"].includes(
       e.target.tagName,
     ) ||
     e.target.closest(".custom-input") ||
-    e.target.closest(".btn")
+    e.target.closest(".btn") ||
+    e.target.closest(".sound-btn")
   )
     return;
-
   isDragging = true;
   mainDashboard.classList.add("grabbing-cursor");
   startX = e.pageX - mainDashboard.offsetLeft;
@@ -216,28 +709,22 @@ mainDashboard.addEventListener("mousedown", (e) => {
   scrollLeft = mainDashboard.scrollLeft;
   scrollTop = mainDashboard.scrollTop;
 });
-
 mainDashboard.addEventListener("mouseleave", () => {
   isDragging = false;
   mainDashboard.classList.remove("grabbing-cursor");
 });
-
 mainDashboard.addEventListener("mouseup", () => {
   isDragging = false;
   mainDashboard.classList.remove("grabbing-cursor");
 });
-
 mainDashboard.addEventListener("mousemove", (e) => {
   if (!isDragging) return;
   e.preventDefault();
   const x = e.pageX - mainDashboard.offsetLeft;
   const y = e.pageY - mainDashboard.offsetTop;
-  const walkX = (x - startX) * 1.5; // Drag speed multiplier
-  const walkY = (y - startY) * 1.5;
-  mainDashboard.scrollLeft = scrollLeft - walkX;
-  mainDashboard.scrollTop = scrollTop - walkY;
+  mainDashboard.scrollLeft = scrollLeft - (x - startX) * 1.5;
+  mainDashboard.scrollTop = scrollTop - (y - startY) * 1.5;
 });
-// --------------------------------------------------------
 
 // Notes Logic
 topicSelect.addEventListener("change", (e) => {
@@ -248,14 +735,12 @@ topicSelect.addEventListener("change", (e) => {
     notesSection.style.display = "none";
   }
 });
-
 function resetNotes() {
   currentSessionNotes = [];
   sessionNotesList.innerHTML = "";
   noteInput.value = "";
   notePrefix.textContent = "1.";
 }
-
 addNoteBtn.addEventListener("click", () => {
   if (noteInput.value.trim() !== "") {
     currentSessionNotes.push(noteInput.value.trim());
@@ -287,7 +772,6 @@ streamSelect.addEventListener("change", (e) => {
     });
   }
 });
-
 subjectSelect.addEventListener("change", (e) => {
   const stream = streamSelect.value;
   const subject = e.target.value;
@@ -304,7 +788,7 @@ subjectSelect.addEventListener("change", (e) => {
   }
 });
 
-// Timer formatting
+// Timer Logic
 function formatTime(totalSeconds) {
   const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
   const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
@@ -332,7 +816,6 @@ function endSession(timeToSave) {
   ]);
   secondsElapsed = 0;
   updatePomoDisplay();
-
   startBtn.disabled = false;
   finishBtn.disabled = true;
   streamSelect.disabled = false;
@@ -361,16 +844,23 @@ startBtn.addEventListener("click", () => {
   pomoTimeInput.disabled = true;
   const isPomodoro = pomodoroToggle.checked;
 
+  loudAlarmSound.pause();
+  loudAlarmSound.currentTime = 0;
+
   timerInterval = setInterval(() => {
     if (isPomodoro) {
       pomodoroSeconds--;
       timeDisplay.textContent = formatTime(pomodoroSeconds);
       if (pomodoroSeconds <= 0) {
-        new Audio(
-          "https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3",
-        ).play();
+        loudAlarmSound
+          .play()
+          .catch((e) => console.log("Audio play blocked by browser."));
         endSession(defaultPomoMins * 60);
-        alert("Pomodoro Complete! Take a break.");
+        setTimeout(() => {
+          alert("Pomodoro Complete! Take a break.");
+          loudAlarmSound.pause();
+          loudAlarmSound.currentTime = 0;
+        }, 300);
       }
     } else {
       secondsElapsed++;
@@ -386,6 +876,7 @@ finishBtn.addEventListener("click", () => {
   endSession(timeToSave);
 });
 
+// Storage and Charting logic
 document.getElementById("closeDetailsBtn").addEventListener("click", () => {
   document.getElementById("dailyDetailsPanel").classList.add("hidden");
 });
@@ -410,7 +901,6 @@ function saveSession(subject, topic, timeInSeconds, notesArray) {
   if (!dailyDetailed[today]) dailyDetailed[today] = {};
   if (!dailyDetailed[today][subject])
     dailyDetailed[today][subject] = { totalTime: 0, topics: {} };
-
   let existingTopicData = dailyDetailed[today][subject].topics[topic];
   if (!existingTopicData) {
     dailyDetailed[today][subject].topics[topic] = { time: 0, notes: [] };
@@ -420,7 +910,6 @@ function saveSession(subject, topic, timeInSeconds, notesArray) {
       notes: [],
     };
   }
-
   dailyDetailed[today][subject].totalTime += timeInSeconds;
   dailyDetailed[today][subject].topics[topic].time += timeInSeconds;
   if (notesArray && notesArray.length > 0) {
@@ -441,9 +930,60 @@ function saveSession(subject, topic, timeInSeconds, notesArray) {
   }
 }
 
-chartTimeframeSelect.addEventListener("change", () => {
-  updateDashboardUI();
-});
+chartTimeframeSelect.addEventListener("change", updateDashboardUI);
+totalTimeFilter.addEventListener("change", updateDashboardUI);
+
+// NEW: Calculates total seconds based on filter dropdown AND Custom Anchors
+function getFilteredTotalSeconds() {
+  const filter = totalTimeFilter.value;
+  let history = JSON.parse(localStorage.getItem("dnp_history")) || {};
+
+  if (filter === "all") {
+    return Object.values(history).reduce(
+      (acc, curr) => acc + curr.totalTime,
+      0,
+    );
+  }
+
+  const dailyData = JSON.parse(localStorage.getItem("dnp_daily")) || {};
+  let totalSecs = 0;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
+  let startBoundary = null;
+  let endBoundary = null;
+
+  if (filter === "7" && anchors.sevenDayStart) {
+    startBoundary = new Date(anchors.sevenDayStart);
+    endBoundary = new Date(startBoundary);
+    endBoundary.setDate(endBoundary.getDate() + 6);
+  } else if (filter === "30" && anchors.oneMonthStart) {
+    startBoundary = new Date(anchors.oneMonthStart);
+    endBoundary = new Date(startBoundary);
+    endBoundary.setDate(endBoundary.getDate() + 29);
+  } else if (filter === "365" && anchors.oneYearStart) {
+    startBoundary = new Date(anchors.oneYearStart + "-01");
+    endBoundary = new Date(startBoundary);
+    endBoundary.setFullYear(endBoundary.getFullYear() + 1);
+    endBoundary.setDate(endBoundary.getDate() - 1);
+  } else {
+    const daysToLookBack = parseInt(filter);
+    endBoundary = today;
+    startBoundary = new Date(today);
+    startBoundary.setDate(startBoundary.getDate() - daysToLookBack + 1);
+  }
+
+  for (let dateStr in dailyData) {
+    const d = new Date(dateStr);
+    d.setHours(0, 0, 0, 0);
+    if (d >= startBoundary && d <= endBoundary) {
+      totalSecs += dailyData[dateStr];
+    }
+  }
+  return totalSecs;
+}
 
 function updateDashboardUI() {
   let history = JSON.parse(localStorage.getItem("dnp_history")) || {};
@@ -453,10 +993,8 @@ function updateDashboardUI() {
   let streak = localStorage.getItem("dnp_streak") || 0;
   let today = new Date().toISOString().split("T")[0];
 
-  let totalSecs = Object.values(history).reduce(
-    (acc, curr) => acc + curr.totalTime,
-    0,
-  );
+  let totalSecs = getFilteredTotalSeconds();
+
   document.getElementById("totalHoursText").textContent =
     `${Math.floor(totalSecs / 3600)}h ${Math.floor((totalSecs % 3600) / 60)}m`;
   document.getElementById("todayMinsText").textContent =
@@ -475,7 +1013,7 @@ function updateDashboardUI() {
     let highest = topicsArr[0] ? topicsArr[0][0] : "None";
     let statRow = `
         <div class="stat-row">
-            <div class="stat-labels"><strong>${subject}</strong><span>${Math.round(data.totalTime / 60)} mins</span></div>
+            <div class="stat-labels"><strong>${subject}</strong><span>${Math.round(data.totalTime / 60)} mins (All time)</span></div>
             <div class="progress-track"><div class="progress-fill" style="width: ${percent}%"></div></div>
             <div class="stat-labels" style="font-size: 0.75em; margin-top: 4px; color: var(--text-muted);"><span>Strongest: ${highest.substring(0, 25)}...</span></div>
         </div>`;
@@ -488,6 +1026,7 @@ function renderChart(dailyDetailed, history) {
   const labels = [];
   const dateKeys = [];
   let timeframe = chartTimeframeSelect.value;
+  const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
 
   if (customHistoricalDates) {
     customHistoricalDates.sort().forEach((dateStr) => {
@@ -505,29 +1044,67 @@ function renderChart(dailyDetailed, history) {
     chartTimeframeSelect.classList.remove("hidden");
 
     if (timeframe === "365") {
-      for (let i = 11; i >= 0; i--) {
-        let d = new Date();
-        d.setMonth(d.getMonth() - i);
-        let monthKey = d.toISOString().slice(0, 7);
-        dateKeys.push(monthKey);
-        labels.push(d.toLocaleDateString("en-US", { month: "short" }));
+      if (anchors.oneYearStart) {
+        let start = new Date(anchors.oneYearStart + "-01");
+        for (let i = 0; i < 12; i++) {
+          let d = new Date(start);
+          d.setMonth(d.getMonth() + i);
+          let monthKey = d.toISOString().slice(0, 7);
+          dateKeys.push(monthKey);
+          labels.push(d.toLocaleDateString("en-US", { month: "short" }));
+        }
+        document.getElementById("chartTitle").textContent =
+          "1-Year Trends (Custom)";
+      } else {
+        for (let i = 11; i >= 0; i--) {
+          let d = new Date();
+          d.setMonth(d.getMonth() - i);
+          let monthKey = d.toISOString().slice(0, 7);
+          dateKeys.push(monthKey);
+          labels.push(d.toLocaleDateString("en-US", { month: "short" }));
+        }
+        document.getElementById("chartTitle").textContent = "1-Year Trends";
       }
-      document.getElementById("chartTitle").textContent = "1-Year Trends";
     } else {
       let days = parseInt(timeframe);
-      for (let i = days - 1; i >= 0; i--) {
-        let d = new Date();
-        d.setDate(d.getDate() - i);
-        let dateStr = d.toISOString().split("T")[0];
-        dateKeys.push(dateStr);
-        let format =
-          days === 7
-            ? { weekday: "short" }
-            : { month: "short", day: "numeric" };
-        labels.push(d.toLocaleDateString("en-US", format));
+      if (timeframe === "7" && anchors.sevenDayStart) {
+        let start = new Date(anchors.sevenDayStart);
+        for (let i = 0; i < 7; i++) {
+          let d = new Date(start);
+          d.setDate(d.getDate() + i);
+          dateKeys.push(d.toISOString().split("T")[0]);
+          labels.push(d.toLocaleDateString("en-US", { weekday: "short" }));
+        }
+        document.getElementById("chartTitle").textContent =
+          "7-Day Trends (Custom)";
+      } else if (timeframe === "30" && anchors.oneMonthStart) {
+        let start = new Date(anchors.oneMonthStart);
+        for (let i = 0; i < 30; i++) {
+          let d = new Date(start);
+          d.setDate(d.getDate() + i);
+          dateKeys.push(d.toISOString().split("T")[0]);
+          labels.push(
+            d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+          );
+        }
+        document.getElementById("chartTitle").textContent =
+          "1-Month Trends (Custom)";
+      } else {
+        // Default backwards generation logic
+        for (let i = days - 1; i >= 0; i--) {
+          let d = new Date();
+          d.setDate(d.getDate() - i);
+          let dateStr = d.toISOString().split("T")[0];
+          dateKeys.push(dateStr);
+          let format =
+            days === 7
+              ? { weekday: "short" }
+              : { month: "short", day: "numeric" };
+          labels.push(d.toLocaleDateString("en-US", format));
+        }
+        document.getElementById("chartTitle").textContent =
+          days === 7 ? "7-Day Trends" : "1-Month Trends";
       }
-      document.getElementById("chartTitle").textContent =
-        days === 7 ? "7-Day Trends" : "1-Month Trends";
     }
   }
 
@@ -544,14 +1121,12 @@ function renderChart(dailyDetailed, history) {
       let timeSecs = 0;
       if (key.length === 7) {
         for (let date in dailyDetailed) {
-          if (date.startsWith(key) && dailyDetailed[date][subject]) {
+          if (date.startsWith(key) && dailyDetailed[date][subject])
             timeSecs += dailyDetailed[date][subject].totalTime;
-          }
         }
       } else {
-        if (dailyDetailed[key] && dailyDetailed[key][subject]) {
+        if (dailyDetailed[key] && dailyDetailed[key][subject])
           timeSecs += dailyDetailed[key][subject].totalTime;
-        }
       }
       return (timeSecs / 60).toFixed(1);
     });
@@ -639,7 +1214,6 @@ function showDailyDetails(dateStr) {
       let timeSec = typeof topicData === "number" ? topicData : topicData.time;
       let notes =
         typeof topicData === "object" && topicData.notes ? topicData.notes : [];
-
       html += `<li><span class="topic-name">${topic}</span> <span class="topic-time">${Math.round(timeSec / 60)}m</span></li>`;
       if (notes.length > 0) {
         html += `<ul style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px; padding-left: 20px; list-style-type: decimal;">`;
@@ -669,7 +1243,6 @@ document.getElementById("openArchiveBtn").addEventListener("click", () => {
   renderArchiveList();
   document.getElementById("archiveModal").classList.remove("hidden");
 });
-
 document.getElementById("openHistoryBtn").addEventListener("click", () => {
   renderHistoryTree();
   document.getElementById("historyModal").classList.remove("hidden");
@@ -709,7 +1282,6 @@ function renderArchiveList() {
     archives.length === 0
       ? '<p class="placeholder-text">No archives found.</p>'
       : "";
-
   archives.forEach((arc) => {
     let d = new Date(arc.date).toLocaleDateString("en-US", {
       year: "numeric",
@@ -725,9 +1297,7 @@ function renderArchiveList() {
     let card = document.createElement("div");
     card.className = "archive-card";
     card.innerHTML = `<div class="archive-info"><h4>Archived on ${d}</h4><p>Total logged: ~${hours} Hours</p></div>
-                      <button class="btn primary" style="padding: 8px 15px; font-size: 0.9em;" onclick="restoreArchive(${arc.id})">
-                          <i class="fas fa-undo"></i> Regain
-                      </button>`;
+                      <button class="btn primary" style="padding: 8px 15px; font-size: 0.9em;" onclick="restoreArchive(${arc.id})"><i class="fas fa-undo"></i> Regain</button>`;
     container.appendChild(card);
   });
 }
@@ -739,7 +1309,6 @@ window.restoreArchive = function (id) {
   let idx = archives.findIndex((a) => a.id === id);
   if (idx === -1) return;
   let target = archives[idx];
-
   let currHistory = JSON.parse(localStorage.getItem("dnp_history")) || {};
   let currDailyDetailed =
     JSON.parse(localStorage.getItem("dnp_daily_detailed")) || {};
@@ -751,7 +1320,6 @@ window.restoreArchive = function (id) {
       currHistory[sub].topics[top] =
         (currHistory[sub].topics[top] || 0) + target.history[sub].topics[top];
   }
-
   for (let date in target.dailyDetailed) {
     if (!currDailyDetailed[date]) currDailyDetailed[date] = {};
     for (let sub in target.dailyDetailed[date]) {
@@ -759,7 +1327,6 @@ window.restoreArchive = function (id) {
         currDailyDetailed[date][sub] = { totalTime: 0, topics: {} };
       currDailyDetailed[date][sub].totalTime +=
         target.dailyDetailed[date][sub].totalTime;
-
       for (let top in target.dailyDetailed[date][sub].topics) {
         let currTopData = currDailyDetailed[date][sub].topics[top];
         let targetTopData = target.dailyDetailed[date][sub].topics[top];
@@ -780,12 +1347,10 @@ window.restoreArchive = function (id) {
       }
     }
   }
-
   localStorage.setItem("dnp_history", JSON.stringify(currHistory));
   localStorage.setItem("dnp_daily_detailed", JSON.stringify(currDailyDetailed));
   archives.splice(idx, 1);
   localStorage.setItem("dnp_archives", JSON.stringify(archives));
-
   updateDashboardUI();
   renderArchiveList();
   document.getElementById("archiveModal").classList.add("hidden");
@@ -817,19 +1382,16 @@ function renderHistoryTree() {
     Object.keys(tree).length === 0
       ? '<p class="placeholder-text">No history logged yet.</p>'
       : "";
-
   for (const year in tree) {
     const yearDiv = document.createElement("div");
     yearDiv.innerHTML = `<h4 class="tree-year"><i class="fas fa-calendar"></i> ${year} <i class="fas fa-chevron-down" style="margin-left:auto; font-size: 0.8em;"></i></h4>`;
     const monthsDiv = document.createElement("div");
     monthsDiv.className = "tree-months hidden";
-
     for (const month in tree[year]) {
       const monthDiv = document.createElement("div");
       monthDiv.innerHTML = `<h5 class="tree-month"><i class="fas fa-calendar-alt"></i> ${month}</h5>`;
       const weeksDiv = document.createElement("div");
       weeksDiv.className = "tree-weeks hidden";
-
       for (const week in tree[year][month]) {
         const weekBtn = document.createElement("button");
         weekBtn.className = "btn tree-week-btn";
