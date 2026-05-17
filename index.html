@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>DN P Tracker PRO</title>
     <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="style.css" />
@@ -15,8 +18,73 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
     />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
   </head>
   <body>
+    <div id="portraitOverlay" class="portrait-lock-overlay">
+      <i
+        class="fas fa-mobile-alt fa-rotate-90"
+        style="font-size: 4rem; color: var(--primary); margin-bottom: 20px"
+      ></i>
+      <h2>Rotate Your Device</h2>
+      <p>
+        DN P Tracker Pro runs in landscape mode for the ultimate immersive study
+        experience.
+      </p>
+    </div>
+
+    <div id="mobileEntryOverlay" class="mobile-entry-overlay">
+      <div
+        class="glass"
+        style="
+          padding: 40px;
+          border-radius: 20px;
+          text-align: center;
+          max-width: 90%;
+        "
+      >
+        <h2 style="color: var(--primary); margin-bottom: 15px">
+          <i class="fas fa-rocket"></i> Ready to Focus?
+        </h2>
+        <p style="color: var(--text-muted); margin-bottom: 30px">
+          Enter Immersive Mode to lock your screen and block distractions.
+        </p>
+
+        <button
+          id="btnEnterImmersive"
+          class="btn primary"
+          style="width: 100%; font-size: 1.2rem; margin-bottom: 15px"
+        >
+          <i class="fas fa-expand"></i> Enter Immersive Mode
+        </button>
+
+        <div
+          id="mobileInstallCard"
+          class="pwa-install-container"
+          style="
+            margin-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 20px;
+          "
+        >
+          <p
+            style="
+              font-size: 0.9em;
+              color: var(--secondary);
+              margin-bottom: 10px;
+            "
+          >
+            For the best experience, install as a native app!
+          </p>
+          <button id="mobileInstallBtn" class="btn success" style="width: 100%">
+            <i class="fas fa-download"></i> Install App
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div class="app-container">
       <aside class="sidebar" id="appSidebar">
         <div class="sidebar-inner">
@@ -39,6 +107,9 @@
             <button id="openArchiveBtn" class="side-btn">
               <i class="fas fa-box-archive"></i> Archive Bucket
             </button>
+            <button id="openSettingsBtn" class="side-btn">
+              <i class="fas fa-cog"></i> Profile Settings
+            </button>
             <button
               onclick="window.location.href = 'admin.html'"
               class="side-btn"
@@ -48,9 +119,12 @@
             </button>
           </div>
 
-          <div id="installPrompt" class="install-card hidden">
-            <div class="install-icon"><i class="fas fa-mobile-alt"></i></div>
-            <p>Install App for the best experience!</p>
+          <div
+            id="installPrompt"
+            class="install-card pc-only pwa-install-container"
+          >
+            <div class="install-icon"><i class="fas fa-laptop-code"></i></div>
+            <p>Install App on PC for quick access!</p>
             <button id="installBtn">
               <i class="fas fa-download"></i> Install Now
             </button>
@@ -62,183 +136,299 @@
       </button>
 
       <main class="dashboard" id="mainDashboard">
-        <header class="dashboard-header">
-          <h1>Overview</h1>
-          <p class="date-display" id="currentDate"></p>
+        <header
+          class="dashboard-header"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+          "
+        >
+          <div>
+            <h1>Overview</h1>
+            <p class="date-display" id="currentDate"></p>
+          </div>
+          <div style="display: flex; gap: 10px">
+            <button
+              id="downloadPdfBtn"
+              class="btn success"
+              style="padding: 10px 20px"
+            >
+              <i class="fas fa-download"></i> Download
+            </button>
+            <button
+              id="sharePdfBtn"
+              class="btn primary"
+              style="padding: 10px 20px"
+            >
+              <i class="fas fa-share-nodes"></i> Share
+            </button>
+          </div>
         </header>
 
-        <div class="stats-overview">
-          <div class="stat-card">
-            <i class="fas fa-clock stat-icon"></i>
-            <div class="stat-info">
-              <h3>Total Studied</h3>
-              <p id="totalHoursText">0h 0m</p>
-            </div>
-          </div>
-          <div class="stat-card">
-            <i class="fas fa-calendar-day stat-icon"></i>
-            <div class="stat-info">
-              <h3>Today's Focus</h3>
-              <p id="todayMinsText">0 mins</p>
-            </div>
-          </div>
-          <div class="stat-card">
-            <i class="fas fa-fire stat-icon"></i>
-            <div class="stat-info">
-              <h3>Day Streak</h3>
-              <p id="streakText">0 Days</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="main-grid" id="mainGrid">
-          <div class="session-panel card glass" id="sessionPanel">
-            <h3
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-              "
-            >
-              <span><i class="fas fa-book-open"></i> Study Session</span>
-              <button
-                id="toggleSessionBtn"
-                class="icon-btn"
-                style="font-size: 0.9em"
-              >
-                <i class="fas fa-compress-alt"></i>
-              </button>
-            </h3>
-
-            <div id="sessionContent">
-              <div class="input-group">
-                <label>Subject</label>
-                <select id="subjectSelect" disabled>
-                  <option value="">Select Stream First</option>
-                </select>
-              </div>
-              <div class="input-group">
-                <label>Topic</label>
-                <select id="topicSelect" disabled>
-                  <option value="">Select Subject First</option>
-                </select>
-              </div>
-
-              <div class="input-group" id="notesSection" style="display: none">
-                <label
-                  >Mini Notes
-                  <span style="font-size: 0.7em; color: var(--text-muted)"
-                    >(Auto-numbered)</span
-                  ></label
+        <div id="pdfCaptureArea">
+          <div class="stats-overview">
+            <div class="stat-card">
+              <i class="fas fa-clock stat-icon"></i>
+              <div class="stat-info" style="flex: 1">
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                  "
                 >
-                <ul id="sessionNotesList" class="mini-notes-list"></ul>
-                <div style="display: flex; gap: 5px; align-items: stretch">
-                  <span id="notePrefix" class="note-prefix">1.</span>
-                  <input
-                    type="text"
-                    id="noteInput"
-                    placeholder="Add a note..."
-                    class="custom-input"
-                  />
-                  <button
-                    id="addNoteBtn"
-                    class="btn primary"
-                    style="padding: 0 15px"
+                  <h3>Total Studied</h3>
+                  <select
+                    id="totalTimeFilter"
+                    class="custom-input small"
+                    style="
+                      width: auto;
+                      padding: 2px 5px;
+                      font-size: 0.75rem;
+                      background: rgba(0, 0, 0, 0.3);
+                      border: none;
+                      cursor: pointer;
+                    "
                   >
-                    <i class="fas fa-plus"></i>
+                    <option value="all">All Time</option>
+                    <option value="7">Last 7 Days</option>
+                    <option value="30">Last 30 Days</option>
+                    <option value="365">Last 1 Year</option>
+                  </select>
+                </div>
+                <p id="totalHoursText">0h 0m</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <i class="fas fa-calendar-day stat-icon"></i>
+              <div class="stat-info">
+                <h3>Today's Focus</h3>
+                <p id="todayMinsText">0 mins</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <i class="fas fa-fire stat-icon"></i>
+              <div class="stat-info">
+                <h3>Day Streak</h3>
+                <p id="streakText">0 Days</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="main-grid" id="mainGrid">
+            <div
+              class="session-panel card glass"
+              id="sessionPanel"
+              data-html2canvas-ignore="true"
+            >
+              <h3
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                "
+              >
+                <span><i class="fas fa-book-open"></i> Study Session</span>
+                <button
+                  id="toggleSessionBtn"
+                  class="icon-btn"
+                  style="font-size: 0.9em"
+                >
+                  <i class="fas fa-compress-alt"></i>
+                </button>
+              </h3>
+
+              <div id="sessionContent">
+                <div class="input-group">
+                  <label>Subject</label>
+                  <select id="subjectSelect" disabled>
+                    <option value="">Select Stream First</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label>Topic</label>
+                  <select id="topicSelect" disabled>
+                    <option value="">Select Subject First</option>
+                  </select>
+                </div>
+
+                <div
+                  class="input-group"
+                  id="notesSection"
+                  style="display: none"
+                >
+                  <label
+                    >Mini Notes
+                    <span style="font-size: 0.7em; color: var(--text-muted)"
+                      >(Auto-numbered)</span
+                    ></label
+                  >
+                  <ul id="sessionNotesList" class="mini-notes-list"></ul>
+                  <div style="display: flex; gap: 5px; align-items: stretch">
+                    <span id="notePrefix" class="note-prefix">1.</span>
+                    <input
+                      type="text"
+                      id="noteInput"
+                      placeholder="Add a note..."
+                      class="custom-input"
+                    />
+                    <button
+                      id="addNoteBtn"
+                      class="btn primary"
+                      style="padding: 0 15px"
+                    >
+                      <i class="fas fa-plus"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="pomodoro-toggle">
+                  <label class="switch">
+                    <input type="checkbox" id="pomodoroToggle" />
+                    <span class="slider round"></span>
+                  </label>
+                  <span
+                    >Pomodoro:
+                    <input
+                      type="number"
+                      id="pomoTimeInput"
+                      value="25"
+                      min="1"
+                      max="120"
+                      class="custom-input small"
+                    />
+                    m</span
+                  >
+                </div>
+
+                <div
+                  class="ambient-sounds-panel"
+                  style="
+                    margin-top: 15px;
+                    padding: 10px;
+                    background: rgba(0, 0, 0, 0.2);
+                    border-radius: 10px;
+                    border: 1px solid var(--glass-border);
+                  "
+                >
+                  <label
+                    style="
+                      display: block;
+                      font-size: 0.85em;
+                      color: var(--text-muted);
+                      margin-bottom: 8px;
+                    "
+                    ><i class="fas fa-headphones"></i> Focus Sounds</label
+                  >
+                  <div style="display: flex; gap: 10px">
+                    <button class="sound-btn" data-sound="rain">
+                      <i class="fas fa-cloud-rain"></i> Rain
+                    </button>
+                    <button class="sound-btn" data-sound="waves">
+                      <i class="fas fa-water"></i> Waves
+                    </button>
+                    <button class="sound-btn" data-sound="forest">
+                      <i class="fas fa-tree"></i> Forest
+                    </button>
+                  </div>
+                  <audio
+                    id="audio-rain"
+                    loop
+                    src="https://actions.google.com/sounds/v1/weather/rain_heavy_loud.ogg"
+                  ></audio>
+                  <audio
+                    id="audio-waves"
+                    loop
+                    src="https://actions.google.com/sounds/v1/water/waves_crashing_on_rock_beach.ogg"
+                  ></audio>
+                  <audio
+                    id="audio-forest"
+                    loop
+                    src="https://actions.google.com/sounds/v1/environments/jungle_day_and_night.ogg"
+                  ></audio>
+                </div>
+              </div>
+
+              <div class="timer-section">
+                <div class="timer-display" id="timeDisplay">00:00:00</div>
+                <div class="controls">
+                  <button id="startBtn" class="btn primary">
+                    <i class="fas fa-play"></i> Start
+                  </button>
+                  <button id="finishBtn" class="btn danger" disabled>
+                    <i class="fas fa-stop"></i> Finish
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="progress-panel card glass">
+              <div class="panel-header-row">
+                <h3
+                  style="
+                    border: none;
+                    padding: 0;
+                    margin: 0;
+                    display: flex;
+                    align-items: center;
+                  "
+                >
+                  <i class="fas fa-chart-line" style="margin-right: 10px"></i>
+                  <span id="chartTitle">Study Trends</span>
+                  <span class="muted-hint" data-html2canvas-ignore="true"
+                    >(Tap points)</span
+                  >
+                </h3>
+
+                <div
+                  style="display: flex; gap: 10px; align-items: center"
+                  data-html2canvas-ignore="true"
+                >
+                  <select id="chartTimeframeSelect" class="custom-input">
+                    <option value="7">7 Days</option>
+                    <option value="30">1 Month</option>
+                    <option value="365">1 Year</option>
+                  </select>
+                  <button
+                    id="resetChartBtn"
+                    class="btn primary hidden"
+                    style="padding: 6px 12px; font-size: 0.8rem"
+                  >
+                    <i class="fas fa-undo"></i> Back
                   </button>
                 </div>
               </div>
 
-              <div class="pomodoro-toggle">
-                <label class="switch">
-                  <input type="checkbox" id="pomodoroToggle" />
-                  <span class="slider round"></span>
-                </label>
-                <span
-                  >Pomodoro:
-                  <input
-                    type="number"
-                    id="pomoTimeInput"
-                    value="25"
-                    min="1"
-                    max="120"
-                    class="custom-input small"
-                  />
-                  m</span
-                >
+              <div class="chart-container">
+                <canvas id="progressChart"></canvas>
               </div>
-            </div>
 
-            <div class="timer-section">
-              <div class="timer-display" id="timeDisplay">00:00:00</div>
-              <div class="controls">
-                <button id="startBtn" class="btn primary">
-                  <i class="fas fa-play"></i> Start
-                </button>
-                <button id="finishBtn" class="btn danger" disabled>
-                  <i class="fas fa-stop"></i> Finish
-                </button>
+              <div id="dailyDetailsPanel" class="daily-details-panel hidden">
+                <div class="panel-header">
+                  <h3>
+                    <i class="fas fa-search-plus"></i> Study Log:
+                    <span id="detailDateLabel"></span>
+                  </h3>
+                  <button
+                    id="closeDetailsBtn"
+                    class="icon-btn"
+                    data-html2canvas-ignore="true"
+                  >
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+                <div id="dailyDetailsContent" class="details-content"></div>
               </div>
-            </div>
-          </div>
 
-          <div class="progress-panel card glass">
-            <div class="panel-header-row">
-              <h3
-                style="
-                  border: none;
-                  padding: 0;
-                  margin: 0;
-                  display: flex;
-                  align-items: center;
-                "
-              >
-                <i class="fas fa-chart-line" style="margin-right: 10px"></i>
-                <span id="chartTitle">Study Trends</span>
-                <span class="muted-hint">(Tap points)</span>
+              <h3 style="margin-top: 20px">
+                <i class="fas fa-bullseye"></i> Subject Mastery
               </h3>
-
-              <div style="display: flex; gap: 10px; align-items: center">
-                <select id="chartTimeframeSelect" class="custom-input">
-                  <option value="7">7 Days</option>
-                  <option value="30">1 Month</option>
-                  <option value="365">1 Year</option>
-                </select>
-                <button
-                  id="resetChartBtn"
-                  class="btn primary hidden"
-                  style="padding: 6px 12px; font-size: 0.8rem"
-                >
-                  <i class="fas fa-undo"></i> Back
-                </button>
+              <div id="progressBarsContainer">
+                <p class="placeholder-text">
+                  Complete a session to see detailed stats.
+                </p>
               </div>
-            </div>
-
-            <div class="chart-container">
-              <canvas id="progressChart"></canvas>
-            </div>
-
-            <div id="dailyDetailsPanel" class="daily-details-panel hidden">
-              <div class="panel-header">
-                <h3>
-                  <i class="fas fa-search-plus"></i> Study Log:
-                  <span id="detailDateLabel"></span>
-                </h3>
-                <button id="closeDetailsBtn" class="icon-btn">
-                  <i class="fas fa-times"></i>
-                </button>
-              </div>
-              <div id="dailyDetailsContent" class="details-content"></div>
-            </div>
-
-            <h3 style="margin-top: 20px">
-              <i class="fas fa-bullseye"></i> Subject Mastery
-            </h3>
-            <div id="progressBarsContainer">
-              <p class="placeholder-text">
-                Complete a session to see detailed stats.
-              </p>
             </div>
           </div>
         </div>
@@ -286,6 +476,157 @@
             <p class="placeholder-text">No archives found.</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div id="settingsModal" class="modal-overlay hidden">
+      <div
+        class="modal-content glass"
+        style="max-width: 450px; text-align: center"
+      >
+        <h2 style="color: var(--primary); margin-bottom: 10px">
+          <i class="fas fa-user-astronaut"></i> Your Profile
+        </h2>
+        <p
+          style="
+            color: var(--text-muted);
+            font-size: 0.9em;
+            margin-bottom: 20px;
+          "
+        >
+          Set your details to power up the motivation engine!
+        </p>
+
+        <div style="text-align: left; margin-bottom: 15px">
+          <label style="color: var(--text-muted); font-size: 0.85em"
+            >Nickname / Name</label
+          >
+          <input
+            type="text"
+            id="userNickname"
+            class="custom-input"
+            placeholder="e.g., Alex"
+          />
+        </div>
+
+        <div style="text-align: left; margin-bottom: 20px">
+          <label style="color: var(--text-muted); font-size: 0.85em"
+            >Exam Target Date</label
+          >
+          <input type="date" id="userExamDate" class="custom-input" />
+        </div>
+
+        <div
+          style="
+            text-align: left;
+            margin-bottom: 20px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid var(--glass-border);
+          "
+        >
+          <label
+            style="
+              color: var(--secondary);
+              font-size: 0.85em;
+              font-weight: 600;
+              display: block;
+              margin-bottom: 10px;
+            "
+          >
+            <i class="fas fa-anchor"></i> Custom Progress Anchors (Set Once)
+          </label>
+          <p
+            style="
+              font-size: 0.75em;
+              color: var(--text-muted);
+              margin-bottom: 10px;
+            "
+          >
+            Set exactly when your 7-Day, 1-Month, and 1-Year charts should begin
+            tracking. Once set, they will be permanently locked.
+          </p>
+
+          <div style="margin-bottom: 10px">
+            <label style="color: var(--text-muted); font-size: 0.75em"
+              >7-Day Start Date</label
+            >
+            <input
+              type="date"
+              id="anchor7Day"
+              class="custom-input"
+              style="padding: 10px; font-size: 0.9em"
+            />
+          </div>
+          <div style="margin-bottom: 10px">
+            <label style="color: var(--text-muted); font-size: 0.75em"
+              >1-Month Start Date</label
+            >
+            <input
+              type="date"
+              id="anchor1Month"
+              class="custom-input"
+              style="padding: 10px; font-size: 0.9em"
+            />
+          </div>
+          <div>
+            <label style="color: var(--text-muted); font-size: 0.75em"
+              >1-Year Start Month</label
+            >
+            <input
+              type="month"
+              id="anchor1Year"
+              class="custom-input"
+              style="padding: 10px; font-size: 0.9em"
+            />
+          </div>
+        </div>
+
+        <button id="saveSettingsBtn" class="btn primary" style="width: 100%">
+          <i class="fas fa-save"></i> Save & Enter
+        </button>
+      </div>
+    </div>
+
+    <div id="motivationModal" class="modal-overlay hidden">
+      <div
+        class="modal-content glass"
+        style="text-align: center; max-width: 500px; padding: 40px"
+      >
+        <div id="motEmoji" style="font-size: 4rem; margin-bottom: 15px">🔥</div>
+        <h2
+          id="motHeadline"
+          style="
+            font-size: 1.8rem;
+            margin-bottom: 15px;
+            background: linear-gradient(
+              135deg,
+              var(--primary),
+              var(--secondary)
+            );
+            background-clip: text;
+            -webkit-background-clip: text;
+            color: transparent;
+            -webkit-text-fill-color: transparent;
+          "
+        ></h2>
+        <p
+          id="motBody"
+          style="
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: var(--text-main);
+            margin-bottom: 25px;
+          "
+        ></p>
+        <button
+          id="closeMotivationBtn"
+          class="btn success"
+          style="width: 100%; font-size: 1.1rem; padding: 15px"
+        >
+          <i class="fas fa-bolt"></i> Let's Grind!
+        </button>
       </div>
     </div>
 
