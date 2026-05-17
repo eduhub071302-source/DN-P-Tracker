@@ -417,7 +417,7 @@ function showMotivationPopup(profile) {
 
 window.addEventListener("DOMContentLoaded", loadUserProfile);
 
-// --- Share & Download PDF Feature ---
+// --- Share & Download PDF Feature (UPDATED LOGIC) ---
 async function generateReportPDF() {
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF("p", "mm", "a4");
@@ -438,11 +438,29 @@ async function generateReportPDF() {
   pdf.setTextColor(59, 130, 246);
   pdf.text("DN P Tracker PRO - Study Report", 14, 20);
 
-  pdf.setFontSize(12);
+  // Added Comprehensive User Details
+  pdf.setFontSize(11);
   pdf.setTextColor(80, 80, 80);
   pdf.text(`Student: ${profile.nickname}`, 14, 30);
-  pdf.text(`Report Period: ${timeframeLabel}`, 14, 36);
-  pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 42);
+
+  let examText = "Not Set";
+  if (profile.examDate) {
+    const ed = new Date(profile.examDate);
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    ed.setHours(0, 0, 0, 0);
+    const diff = Math.ceil((ed - t) / (1000 * 60 * 60 * 24));
+    if (diff > 0) examText = `${ed.toLocaleDateString()} (${diff} days left)`;
+    else if (diff === 0) examText = `${ed.toLocaleDateString()} (Today!)`;
+    else examText = `${ed.toLocaleDateString()} (Completed)`;
+  }
+  pdf.text(`Exam Target: ${examText}`, 14, 36);
+
+  const streak = localStorage.getItem("dnp_streak") || 0;
+  pdf.text(`Current Streak: ${streak} Days`, 14, 42);
+
+  pdf.text(`Report Period: ${timeframeLabel}`, 105, 30);
+  pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, 105, 36);
 
   let currentY = 55;
 
@@ -487,7 +505,7 @@ async function generateReportPDF() {
     currentY = 20;
   }
 
-  pdf.setFontSize(18);
+  pdf.setFontSize(16);
   pdf.setTextColor(59, 130, 246);
   pdf.text("Detailed Study Log Breakdown", 14, currentY);
   currentY += 10;
@@ -498,7 +516,7 @@ async function generateReportPDF() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // PDF Boundary Check aligned with custom anchors
+  // PDF Boundary Check aligned with custom anchors (Fixed local timezone shifting)
   if (customHistoricalDates) {
     activeDates = customHistoricalDates;
   } else {
@@ -507,15 +525,18 @@ async function generateReportPDF() {
     let endBoundary = null;
 
     if (timeframeDropdown.value === "7" && anchors.sevenDayStart) {
-      startBoundary = new Date(anchors.sevenDayStart);
+      let [y, m, d] = anchors.sevenDayStart.split("-");
+      startBoundary = new Date(y, m - 1, d);
       endBoundary = new Date(startBoundary);
       endBoundary.setDate(endBoundary.getDate() + 6);
     } else if (timeframeDropdown.value === "30" && anchors.oneMonthStart) {
-      startBoundary = new Date(anchors.oneMonthStart);
+      let [y, m, d] = anchors.oneMonthStart.split("-");
+      startBoundary = new Date(y, m - 1, d);
       endBoundary = new Date(startBoundary);
       endBoundary.setDate(endBoundary.getDate() + 29);
     } else if (timeframeDropdown.value === "365" && anchors.oneYearStart) {
-      startBoundary = new Date(anchors.oneYearStart + "-01");
+      let [y, m] = anchors.oneYearStart.split("-");
+      startBoundary = new Date(y, m - 1, 1);
       endBoundary = new Date(startBoundary);
       endBoundary.setFullYear(endBoundary.getFullYear() + 1);
       endBoundary.setDate(endBoundary.getDate() - 1);
@@ -524,24 +545,28 @@ async function generateReportPDF() {
         timeframeDropdown.value === "365"
           ? 365
           : parseInt(timeframeDropdown.value);
-      endBoundary = today;
-      startBoundary = new Date();
+      endBoundary = new Date(today);
+      startBoundary = new Date(today);
       startBoundary.setDate(startBoundary.getDate() - days + 1);
     }
 
     for (let dateStr in dailyDetailed) {
-      const d = new Date(dateStr);
-      d.setHours(0, 0, 0, 0);
-      if (d >= startBoundary && d <= endBoundary) {
+      let [y, m, d] = dateStr.split("-");
+      const loopDate = new Date(y, m - 1, d);
+      if (loopDate >= startBoundary && loopDate <= endBoundary) {
         activeDates.push(dateStr);
       }
     }
   }
 
-  activeDates.sort((a, b) => new Date(a) - new Date(b));
+  activeDates.sort((a, b) => {
+    let [y1, m1, d1] = a.split("-");
+    let [y2, m2, d2] = b.split("-");
+    return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+  });
 
   if (activeDates.length === 0) {
-    pdf.setFontSize(12);
+    pdf.setFontSize(11);
     pdf.setTextColor(100, 100, 100);
     pdf.text("No study data recorded for this timeframe.", 14, currentY);
   } else {
@@ -569,19 +594,20 @@ async function generateReportPDF() {
       }
 
       if (tableBody.length > 0) {
-        const niceDate = new Date(dateStr).toLocaleDateString("en-US", {
+        let [y, m, d] = dateStr.split("-");
+        const niceDate = new Date(y, m - 1, d).toLocaleDateString("en-US", {
           weekday: "long",
           year: "numeric",
           month: "long",
           day: "numeric",
         });
 
-        if (currentY > 270) {
+        if (currentY > 260) {
           pdf.addPage();
           currentY = 20;
         }
 
-        pdf.setFontSize(13);
+        pdf.setFontSize(12);
         pdf.setTextColor(40, 40, 40);
         pdf.text(niceDate, 14, currentY);
         currentY += 4;
