@@ -1,4 +1,4 @@
-const CACHE_NAME = "dnp-tracker-v1";
+const CACHE_NAME = "dnp-tracker-v10";
 const urlsToCache = [
   "./",
   "./index.html",
