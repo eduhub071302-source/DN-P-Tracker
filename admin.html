@@ -15,13 +15,11 @@
     />
 
     <style>
-      /* Pro Admin Specific Styles */
       .admin-wrapper {
         padding: 30px;
         height: 100vh;
         display: flex;
         flex-direction: column;
-        /* FIX: Changed from hidden to auto to allow full scrolling */
         overflow: auto;
       }
       .admin-header {
@@ -45,7 +43,6 @@
         grid-template-columns: 1fr 1fr 1.5fr;
         gap: 20px;
         flex: 1;
-        /* FIX: Allow inner scrolling and enforce a min-width for horizontal sliding */
         overflow: auto;
         min-width: 900px;
       }
@@ -58,7 +55,6 @@
         flex-direction: column;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         position: relative;
-        /* FIX: Ensures the columns don't squish too much vertically */
         min-height: 450px;
       }
       .col-header {
@@ -197,7 +193,6 @@
         color: var(--primary);
       }
 
-      /* Search Bar */
       .search-bar {
         width: 100%;
         padding: 10px 15px;
@@ -212,7 +207,6 @@
         border-color: var(--primary);
       }
 
-      /* Toast Notification */
       #toast {
         position: fixed;
         bottom: 30px;
@@ -429,7 +423,6 @@
     </div>
 
     <script>
-      // --- Smooth Exit Function ---
       function exitToApp() {
         document.body.style.transition = "opacity 0.4s ease";
         document.body.style.opacity = "0";
@@ -438,7 +431,6 @@
         }, 400);
       }
 
-      // --- Authentication Logic ---
       const TARGET_PWD = "##!!kushidinu270813!!##";
       const authOverlay = document.getElementById("authOverlay");
       const adminPanel = document.getElementById("adminPanel");
@@ -458,14 +450,12 @@
         if (e.key === "Enter") document.getElementById("loginBtn").click();
       });
 
-      // --- Data Management & State ---
       let appData = JSON.parse(localStorage.getItem("dnp_appData")) || {
         streams: {},
       };
-      let currentStream = null;
-      let currentSubject = null;
+      let currentStream = null,
+        currentSubject = null;
 
-      // Toast Utility
       function showToast(message, type = "info") {
         const toast = document.getElementById("toast");
         toast.className = `show ${type}`;
@@ -473,15 +463,12 @@
         setTimeout(() => toast.classList.remove("show"), 3000);
       }
 
-      // --- Render Functions ---
       function renderStreams() {
         const list = document.getElementById("streamsList");
         list.innerHTML = "";
-
         Object.keys(appData.streams).forEach((streamName) => {
           let count = Object.keys(appData.streams[streamName].subjects).length;
           let isActive = streamName === currentStream ? "active" : "";
-
           let div = document.createElement("div");
           div.className = `list-item ${isActive}`;
           div.onclick = () => selectStream(streamName);
@@ -495,16 +482,14 @@
           `;
           list.appendChild(div);
         });
-
         if (!currentStream || !appData.streams[currentStream])
           resetSubjectPanel();
       }
 
       function selectStream(streamName) {
         currentStream = streamName;
-        currentSubject = null; // reset lower hierarchy
-        renderStreams(); // to update active class
-
+        currentSubject = null;
+        renderStreams();
         document.getElementById("subjectPlaceholder").classList.add("hidden");
         document.getElementById("subjectContent").classList.remove("hidden");
         resetTopicPanel();
@@ -515,12 +500,10 @@
         const list = document.getElementById("subjectsList");
         list.innerHTML = "";
         if (!currentStream || !appData.streams[currentStream]) return;
-
         let subjects = appData.streams[currentStream].subjects;
         Object.keys(subjects).forEach((subName) => {
           let count = subjects[subName].length;
           let isActive = subName === currentSubject ? "active" : "";
-
           let div = document.createElement("div");
           div.className = `list-item ${isActive}`;
           div.onclick = () => selectSubject(subName);
@@ -538,8 +521,7 @@
 
       function selectSubject(subName) {
         currentSubject = subName;
-        renderSubjects(); // update active class
-
+        renderSubjects();
         document.getElementById("topicPlaceholder").classList.add("hidden");
         document.getElementById("topicContent").classList.remove("hidden");
         renderTopics();
@@ -554,15 +536,12 @@
           !appData.streams[currentStream].subjects[currentSubject]
         )
           return;
-
         let topics = appData.streams[currentStream].subjects[currentSubject];
         document.getElementById("topicCountBadge").textContent =
           `${topics.length} Total`;
-
         topics.forEach((topic, idx) => {
           if (filter && !topic.toLowerCase().includes(filter.toLowerCase()))
             return;
-
           let div = document.createElement("div");
           div.className = "list-item";
           div.style.cursor = "default";
@@ -592,9 +571,6 @@
         document.getElementById("topicSearch").value = "";
       }
 
-      // --- Add / Edit / Delete Actions ---
-
-      // Streams
       document.getElementById("addStreamBtn").addEventListener("click", () => {
         let val = document.getElementById("newStreamInput").value.trim();
         if (val && !appData.streams[val]) {
@@ -632,8 +608,6 @@
           newName = newName.trim();
           if (appData.streams[newName])
             return showToast("Name already exists!", "error");
-
-          // Maintain object integrity
           appData.streams[newName] = appData.streams[oldName];
           delete appData.streams[oldName];
           if (currentStream === oldName) currentStream = newName;
@@ -643,7 +617,6 @@
         }
       };
 
-      // Subjects
       document.getElementById("addSubjectBtn").addEventListener("click", () => {
         let val = document.getElementById("newSubjectInput").value.trim();
         if (
@@ -653,7 +626,7 @@
         ) {
           appData.streams[currentStream].subjects[val] = [];
           document.getElementById("newSubjectInput").value = "";
-          renderStreams(); // Update count
+          renderStreams();
           renderSubjects();
           showToast("Subject added", "success");
         }
@@ -669,7 +642,7 @@
         if (confirm(`Delete subject "${name}" and all its topics?`)) {
           delete appData.streams[currentStream].subjects[name];
           if (currentSubject === name) resetTopicPanel();
-          renderStreams(); // Update count
+          renderStreams();
           renderSubjects();
           showToast("Subject deleted", "info");
         }
@@ -681,7 +654,6 @@
           newName = newName.trim();
           if (appData.streams[currentStream].subjects[newName])
             return showToast("Subject already exists!", "error");
-
           appData.streams[currentStream].subjects[newName] =
             appData.streams[currentStream].subjects[oldName];
           delete appData.streams[currentStream].subjects[oldName];
@@ -692,13 +664,12 @@
         }
       };
 
-      // Topics
       document.getElementById("addTopicBtn").addEventListener("click", () => {
         let val = document.getElementById("newTopicInput").value.trim();
         if (val && currentSubject) {
           appData.streams[currentStream].subjects[currentSubject].push(val);
           document.getElementById("newTopicInput").value = "";
-          renderSubjects(); // Update count
+          renderSubjects();
           renderTopics();
           showToast("Topic added", "success");
         }
@@ -711,7 +682,7 @@
 
       window.deleteTopic = (idx) => {
         appData.streams[currentStream].subjects[currentSubject].splice(idx, 1);
-        renderSubjects(); // Update count
+        renderSubjects();
         renderTopics();
       };
 
@@ -727,12 +698,10 @@
         }
       };
 
-      // Search Logic
       document.getElementById("topicSearch").addEventListener("input", (e) => {
         renderTopics(e.target.value);
       });
 
-      // --- Pro File Sync (Import/Export) ---
       document.getElementById("exportBtn").addEventListener("click", () => {
         const dataStr = JSON.stringify(appData, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" });
@@ -748,17 +717,14 @@
       document.getElementById("importBtn").addEventListener("click", () => {
         document.getElementById("importFile").click();
       });
-
       document.getElementById("importFile").addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
             const importedData = JSON.parse(event.target.result);
             if (!importedData.streams) throw new Error("Invalid Format");
-
             if (
               confirm(
                 "Warning: Importing will overwrite your current configuration. Proceed?",
@@ -773,17 +739,14 @@
           } catch (err) {
             showToast("Error: Invalid JSON file structure.", "error");
           }
-          e.target.value = ""; // reset file input
+          e.target.value = "";
         };
         reader.readAsText(file);
       });
 
-      // --- Save & Exit ---
       document.getElementById("saveBtn").addEventListener("click", () => {
         localStorage.setItem("dnp_appData", JSON.stringify(appData));
         showToast("Configuration Saved & Deployed to Main App!", "success");
-
-        // Smooth transition out after saving
         document.body.style.transition = "opacity 0.4s ease";
         document.body.style.opacity = "0";
         setTimeout(() => {
