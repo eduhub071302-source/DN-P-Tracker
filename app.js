@@ -187,7 +187,6 @@ function handleInstallClick() {
     deferredPrompt.userChoice.then((choiceResult) => {
       if (choiceResult.outcome === "accepted") {
         console.log("User accepted the install prompt");
-        // Handled by CSS automatically (hides buttons when installed)
       }
       deferredPrompt = null;
     });
@@ -933,7 +932,6 @@ function saveSession(subject, topic, timeInSeconds, notesArray) {
 chartTimeframeSelect.addEventListener("change", updateDashboardUI);
 totalTimeFilter.addEventListener("change", updateDashboardUI);
 
-// NEW: Calculates total seconds based on filter dropdown AND Custom Anchors
 function getFilteredTotalSeconds() {
   const filter = totalTimeFilter.value;
   let history = JSON.parse(localStorage.getItem("dnp_history")) || {};
@@ -1414,5 +1412,22 @@ function renderHistoryTree() {
     container.appendChild(yearDiv);
   }
 }
+
+// ----------------------------------------------------
+// THE MAGIC FIX FOR LOCAL STORAGE UI SYNC BUGS
+// This ensures the UI instantly updates when you come back
+// to the app after keeping it minimized in the background.
+// ----------------------------------------------------
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    // Re-fetch data from localStorage directly just in case
+    // it was updated in another tab or instance
+    appData = JSON.parse(localStorage.getItem("dnp_appData")) || {
+      streams: defaultStreams,
+    };
+    updateDashboardUI();
+    loadUserProfile();
+  }
+});
 
 updateDashboardUI();
