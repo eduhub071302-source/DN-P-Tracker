@@ -8,6 +8,11 @@
     />
     <title>DN P Tracker PRO</title>
     <link rel="manifest" href="manifest.json" />
+    <link
+      rel="apple-touch-icon"
+      href="https://cdn-icons-png.flaticon.com/512/3135/3135692.png"
+    />
+
     <link rel="stylesheet" href="style.css" />
     <link
       href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
@@ -632,10 +637,14 @@
 
     <script src="app.js"></script>
     <script>
+      // Enforced update check for the Service Worker
       if ("serviceWorker" in navigator) {
-        navigator.serviceWorker
-          .register("sw.js")
-          .then(() => console.log("Service Worker Registered"));
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("sw.js").then((registration) => {
+            registration.update(); // Forces browser to check GitHub for a new SW immediately
+            console.log("Service Worker Registered & Update Checked");
+          });
+        });
       }
     </script>
   </body>
