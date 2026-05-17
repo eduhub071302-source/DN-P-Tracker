@@ -1,4 +1,4 @@
-/* ALL YOUR EXISTING CSS REMAINS THE SAME. I AM COPYING IT AND APPENDING NEW RULES. */
+/* ALL YOUR EXISTING CSS REMAINS THE SAME. */
 
 :root {
   --bg-main: #0f172a;
@@ -269,9 +269,11 @@ select:focus,
 .custom-input:focus {
   border-color: var(--primary);
 }
-select:disabled {
+select:disabled,
+.custom-input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  border-color: rgba(255, 255, 255, 0.05);
 }
 .custom-input.small {
   width: 60px;
@@ -734,4 +736,116 @@ input:checked + .slider:before {
   padding: 20px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.2);
+}
+
+/* Special Styling for Date Input to fit Pro Theme */
+input[type="date"],
+input[type="month"] {
+  color-scheme: dark;
+}
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[type="month"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+#pdfCaptureArea {
+  padding-bottom: 20px;
+}
+
+/* Ambient Focus Sounds Styling */
+.sound-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 0.85em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sound-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+.sound-btn.active {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: var(--success);
+  color: var(--success);
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+/* Portrait Orientation Lock Setup */
+.portrait-lock-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-main);
+  z-index: 9999;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 30px;
+}
+.portrait-lock-overlay h2 {
+  margin-bottom: 10px;
+  color: white;
+}
+.portrait-lock-overlay p {
+  color: var(--text-muted);
+}
+
+@media screen and (max-width: 900px) and (orientation: portrait) {
+  .portrait-lock-overlay {
+    display: flex;
+  }
+  .app-container,
+  .mobile-entry-overlay {
+    display: none !important;
+  }
+}
+
+/* Mobile Entry Setup */
+.mobile-entry-overlay {
+  display: none;
+}
+@media (max-width: 1024px) {
+  .mobile-entry-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: var(--bg-main);
+    z-index: 9000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+  .pc-only {
+    display: none !important;
+  }
+}
+body.immersive-active .mobile-entry-overlay {
+  display: none !important;
+}
+
+/* Auto-Hide PWA Install Prompts if the App is successfully running standalone */
+@media all and (display-mode: standalone) {
+  .pwa-install-container {
+    display: none !important;
+  }
 }
