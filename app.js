@@ -146,6 +146,10 @@ const loudAlarmSound = new Audio(
 );
 loudAlarmSound.volume = 1.0;
 
+// Programmatic Silent Audio to preserve lock-screen media state
+const silentAudioLoop = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+silentAudioLoop.loop = true;
+
 // --- State ---
 let timerInterval;
 let secondsElapsed = 0;
@@ -263,7 +267,6 @@ function loadUserProfile() {
   const profile = JSON.parse(localStorage.getItem("dnp_userProfile"));
   const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
 
-  // Fill and lock anchor inputs if they were set previously
   if (anchors.sevenDayStart) {
     anchor7DayInput.value = anchors.sevenDayStart;
     anchor7DayInput.disabled = true;
@@ -301,7 +304,6 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
     return;
   }
 
-  // Handle Custom Anchors Save
   const anchors = JSON.parse(localStorage.getItem("dnp_customAnchors")) || {};
   let anchorsChanged = false;
 
@@ -323,7 +325,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", () => {
 
   if (anchorsChanged) {
     localStorage.setItem("dnp_customAnchors", JSON.stringify(anchors));
-    updateDashboardUI(); // Refresh charts to apply newly set anchors
+    updateDashboardUI();
   }
 
   const profile = { nickname, examDate };
@@ -415,9 +417,15 @@ function showMotivationPopup(profile) {
   motivationModal.classList.remove("hidden");
 }
 
-window.addEventListener("DOMContentLoaded", loadUserProfile);
+window.addEventListener("DOMContentLoaded", () => {
+  loadUserProfile();
+  checkActiveSession();
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+});
 
-// --- Share & Download PDF Feature (UPDATED LOGIC) ---
+// --- Share & Download PDF Feature ---
 async function generateReportPDF() {
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF("p", "mm", "a4");
@@ -438,7 +446,6 @@ async function generateReportPDF() {
   pdf.setTextColor(59, 130, 246);
   pdf.text("DN P Tracker PRO - Study Report", 14, 20);
 
-  // Added Comprehensive User Details
   pdf.setFontSize(11);
   pdf.setTextColor(80, 80, 80);
   pdf.text(`Student: ${profile.nickname}`, 14, 30);
@@ -516,7 +523,6 @@ async function generateReportPDF() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  // PDF Boundary Check aligned with custom anchors (Fixed local timezone shifting)
   if (customHistoricalDates) {
     activeDates = customHistoricalDates;
   } else {
@@ -773,6 +779,15 @@ function resetNotes() {
   noteInput.value = "";
   notePrefix.textContent = "1.";
 }
+
+function updateStoredActiveSessionNotes() {
+  const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
+  if (activeSession) {
+    activeSession.notes = [...currentSessionNotes];
+    localStorage.setItem("dnp_activeSession", JSON.stringify(activeSession));
+  }
+}
+
 addNoteBtn.addEventListener("click", () => {
   if (noteInput.value.trim() !== "") {
     currentSessionNotes.push(noteInput.value.trim());
@@ -781,6 +796,7 @@ addNoteBtn.addEventListener("click", () => {
     sessionNotesList.appendChild(li);
     noteInput.value = "";
     notePrefix.textContent = `${currentSessionNotes.length + 1}.`;
+    updateStoredActiveSessionNotes();
   }
 });
 noteInput.addEventListener("keypress", (e) => {
@@ -846,6 +862,126 @@ function updatePomoDisplay() {
 pomodoroToggle.addEventListener("change", updatePomoDisplay);
 pomoTimeInput.addEventListener("change", updatePomoDisplay);
 
+// Persistent Absolute Time Logic
+function startTimerLoop(startTimeEpoch) {
+  if (timerInterval) clearInterval(timerInterval);
+
+  const isPomodoro = pomodoroToggle.checked;
+  const totalPomoSeconds = defaultPomoMins * 60;
+
+  timerInterval = setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - startTimeEpoch) / 1000);
+    secondsElapsed = elapsedSeconds;
+
+    if (isPomodoro) {
+      pomodoroSeconds = totalPomoSeconds - elapsedSeconds;
+      if (pomodoroSeconds <= 0) {
+        pomodoroSeconds = 0;
+        timeDisplay.textContent = formatTime(0);
+        loudAlarmSound.play().catch((e) => console.log("Audio play blocked by browser."));
+        
+        localStorage.removeItem("dnp_activeSession");
+        clearMediaSession();
+        endSession(totalPomoSeconds);
+        
+        setTimeout(() => {
+          alert("Pomodoro Complete! Take a break.");
+          loudAlarmSound.pause();
+          loudAlarmSound.currentTime = 0;
+        }, 300);
+      } else {
+        timeDisplay.textContent = formatTime(pomodoroSeconds);
+      }
+    } else {
+      timeDisplay.textContent = formatTime(secondsElapsed);
+    }
+  }, 1000);
+}
+
+function checkActiveSession() {
+  const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
+  if (activeSession) {
+    isRunning = true;
+    currentSubject = activeSession.subject;
+    currentTopic = activeSession.topic;
+
+    streamSelect.value = activeSession.stream;
+    
+    // Rebuild Subject dropdown items
+    subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+    if (activeSession.stream && streams[activeSession.stream]) {
+      Object.keys(streams[activeSession.stream].subjects).forEach((sub) => {
+        let opt = document.createElement("option");
+        opt.value = sub;
+        opt.textContent = sub;
+        subjectSelect.appendChild(opt);
+      });
+    }
+    subjectSelect.value = activeSession.subject;
+
+    // Rebuild Topic dropdown items
+    topicSelect.innerHTML = '<option value="">-- Select Topic --</option>';
+    if (activeSession.stream && activeSession.subject && streams[activeSession.stream].subjects[activeSession.subject]) {
+      streams[activeSession.stream].subjects[activeSession.subject].forEach((topic) => {
+        let opt = document.createElement("option");
+        opt.value = topic;
+        opt.textContent = topic;
+        topicSelect.appendChild(opt);
+      });
+    }
+    topicSelect.value = activeSession.topic;
+
+    pomodoroToggle.checked = activeSession.isPomodoro;
+    pomoTimeInput.value = activeSession.defaultPomoMins;
+    defaultPomoMins = activeSession.defaultPomoMins;
+
+    currentSessionNotes = activeSession.notes || [];
+    sessionNotesList.innerHTML = "";
+    currentSessionNotes.forEach((note, idx) => {
+      let li = document.createElement("li");
+      li.textContent = `${idx + 1}. ${note}`;
+      sessionNotesList.appendChild(li);
+    });
+    notePrefix.textContent = `${currentSessionNotes.length + 1}.`;
+    notesSection.style.display = currentTopic ? "block" : "none";
+
+    startBtn.disabled = true;
+    finishBtn.disabled = false;
+    streamSelect.disabled = true;
+    subjectSelect.disabled = true;
+    topicSelect.disabled = true;
+    pomodoroToggle.disabled = true;
+    pomoTimeInput.disabled = true;
+
+    silentAudioLoop.play().catch(() => console.log("Silent loop ready."));
+    startTimerLoop(activeSession.startTime);
+    setupMediaSession();
+  }
+}
+
+function setupMediaSession() {
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: `Studying: ${currentTopic || 'Session'}`,
+      artist: `Subject: ${currentSubject || 'General'}`,
+      album: 'DN P Tracker PRO',
+      artwork: [
+        { src: 'https://cdn-icons-png.flaticon.com/512/3135/3135692.png', sizes: '192x192', type: 'image/png' }
+      ]
+    });
+    navigator.mediaSession.setActionHandler('stop', () => {
+      if (finishBtn && !finishBtn.disabled) finishBtn.click();
+    });
+  }
+}
+
+function clearMediaSession() {
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = null;
+  }
+  silentAudioLoop.pause();
+}
+
 function endSession(timeToSave) {
   clearInterval(timerInterval);
   isRunning = false;
@@ -870,6 +1006,7 @@ function endSession(timeToSave) {
 startBtn.addEventListener("click", () => {
   if (!subjectSelect.value || !topicSelect.value)
     return alert("Please select a subject and topic first!");
+  
   isRunning = true;
   currentSubject = subjectSelect.value;
   currentTopic = topicSelect.value;
@@ -880,38 +1017,54 @@ startBtn.addEventListener("click", () => {
   topicSelect.disabled = true;
   pomodoroToggle.disabled = true;
   pomoTimeInput.disabled = true;
-  const isPomodoro = pomodoroToggle.checked;
 
   loudAlarmSound.pause();
   loudAlarmSound.currentTime = 0;
 
-  timerInterval = setInterval(() => {
-    if (isPomodoro) {
-      pomodoroSeconds--;
-      timeDisplay.textContent = formatTime(pomodoroSeconds);
-      if (pomodoroSeconds <= 0) {
-        loudAlarmSound
-          .play()
-          .catch((e) => console.log("Audio play blocked by browser."));
-        endSession(defaultPomoMins * 60);
-        setTimeout(() => {
-          alert("Pomodoro Complete! Take a break.");
-          loudAlarmSound.pause();
-          loudAlarmSound.currentTime = 0;
-        }, 300);
-      }
-    } else {
-      secondsElapsed++;
-      timeDisplay.textContent = formatTime(secondsElapsed);
-    }
-  }, 1000);
+  const startTimeEpoch = Date.now();
+  const activeSessionData = {
+    startTime: startTimeEpoch,
+    stream: streamSelect.value,
+    subject: subjectSelect.value,
+    topic: topicSelect.value,
+    isPomodoro: pomodoroToggle.checked,
+    defaultPomoMins: parseInt(pomoTimeInput.value) || 25,
+    notes: [...currentSessionNotes]
+  };
+  localStorage.setItem("dnp_activeSession", JSON.stringify(activeSessionData));
+
+  silentAudioLoop.play().catch((e) => console.log("Audio lock framework initialized."));
+  startTimerLoop(startTimeEpoch);
+  setupMediaSession();
 });
 
 finishBtn.addEventListener("click", () => {
-  const timeToSave = pomodoroToggle.checked
-    ? defaultPomoMins * 60 - pomodoroSeconds
-    : secondsElapsed;
-  endSession(timeToSave);
+  const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
+  let calculatedTime = 0;
+  
+  if (activeSession) {
+    const calculatedDuration = Math.floor((Date.now() - activeSession.startTime) / 1000);
+    calculatedTime = pomodoroToggle.checked
+      ? Math.min(defaultPomoMins * 60, calculatedDuration)
+      : calculatedDuration;
+  } else {
+    calculatedTime = pomodoroToggle.checked
+      ? defaultPomoMins * 60 - pomodoroSeconds
+      : secondsElapsed;
+  }
+
+  localStorage.removeItem("dnp_activeSession");
+  clearMediaSession();
+  
+  if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+    navigator.serviceWorker.ready.then(reg => {
+      reg.getNotifications({ tag: "study-session" }).then(notifications => {
+        notifications.forEach(n => n.close());
+      });
+    });
+  }
+
+  endSession(calculatedTime);
 });
 
 // Storage and Charting logic
@@ -1125,7 +1278,6 @@ function renderChart(dailyDetailed, history) {
         document.getElementById("chartTitle").textContent =
           "1-Month Trends (Custom)";
       } else {
-        // Default backwards generation logic
         for (let i = days - 1; i >= 0; i--) {
           let d = new Date();
           d.setDate(d.getDate() - i);
@@ -1460,20 +1612,43 @@ function renderHistoryTree() {
   }
 }
 
-// ----------------------------------------------------
-// THE MAGIC FIX FOR LOCAL STORAGE UI SYNC BUGS
-// This ensures the UI instantly updates when you come back
-// to the app after keeping it minimized in the background.
-// ----------------------------------------------------
+// Mobile Background Context & Local Visibility Calibration Loop
 document.addEventListener("visibilitychange", () => {
+  const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
+
   if (document.visibilityState === "visible") {
-    // Re-fetch data from localStorage directly just in case
-    // it was updated in another tab or instance
     appData = JSON.parse(localStorage.getItem("dnp_appData")) || {
       streams: defaultStreams,
     };
+    
+    if (activeSession && isRunning) {
+      startTimerLoop(activeSession.startTime);
+    }
+    
     updateDashboardUI();
     loadUserProfile();
+
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.ready.then(reg => {
+        reg.getNotifications({ tag: "study-session" }).then(notifications => {
+          notifications.forEach(n => n.close());
+        });
+      });
+    }
+  } else {
+    // If user minimizes app or leaves, dispatch a push-card monitoring reminder
+    if (activeSession && isRunning && "Notification" in window && Notification.permission === "granted") {
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.showNotification("DN P Tracker PRO", {
+          body: `⏱️ Study Session Active: ${activeSession.subject} - ${activeSession.topic}`,
+          icon: "https://cdn-icons-png.flaticon.com/512/3135/3135692.png",
+          tag: "study-session",
+          renotify: false,
+          silent: true,
+          sticky: true
+        });
+      });
+    }
   }
 });
 
