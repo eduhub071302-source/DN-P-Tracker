@@ -579,8 +579,15 @@ async function generateReportPDF() {
         for (const [topic, topicData] of Object.entries(data.topics)) {
           let timeSec =
             typeof topicData === "number" ? topicData : topicData.time;
-          let mins = Math.round(timeSec / 60);
-          if (mins === 0 && timeSec > 0) mins = "<1";
+          
+          let durationText = "";
+          if (timeSec > 0 && timeSec < 60) {
+            durationText = "<1m";
+          } else {
+            const h = Math.floor(timeSec / 3600);
+            const m = Math.floor((timeSec % 3600) / 60);
+            durationText = h > 0 ? `${h}h ${m}m` : `${m}m`;
+          }
 
           let notes =
             typeof topicData === "object" &&
@@ -589,7 +596,7 @@ async function generateReportPDF() {
               ? topicData.notes.map((n, i) => `${i + 1}. ${n}`).join("\n")
               : "-";
 
-          tableBody.push([subject, topic, `${mins} mins`, notes]);
+          tableBody.push([subject, topic, durationText, notes]);
         }
       }
 
@@ -813,12 +820,18 @@ subjectSelect.addEventListener("change", (e) => {
   }
 });
 
-// Timer Logic
+// Timer & Time Formatting Logic
 function formatTime(totalSeconds) {
   const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
   const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
   const s = String(totalSeconds % 60).padStart(2, "0");
   return `${h}:${m}:${s}`;
+}
+
+function formatToHoursMins(totalSeconds) {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  return `${h}h ${m}m`;
 }
 
 function updatePomoDisplay() {
@@ -1019,10 +1032,8 @@ function updateDashboardUI() {
 
   let totalSecs = getFilteredTotalSeconds();
 
-  document.getElementById("totalHoursText").textContent =
-    `${Math.floor(totalSecs / 3600)}h ${Math.floor((totalSecs % 3600) / 60)}m`;
-  document.getElementById("todayMinsText").textContent =
-    `${Math.round((dailyData[today] || 0) / 60)} mins`;
+  document.getElementById("totalHoursText").textContent = formatToHoursMins(totalSecs);
+  document.getElementById("todayMinsText").textContent = formatToHoursMins(dailyData[today] || 0);
   document.getElementById("streakText").textContent = `${streak} Days`;
 
   renderChart(dailyDetailed, history);
@@ -1037,7 +1048,7 @@ function updateDashboardUI() {
     let highest = topicsArr[0] ? topicsArr[0][0] : "None";
     let statRow = `
         <div class="stat-row">
-            <div class="stat-labels"><strong>${subject}</strong><span>${Math.round(data.totalTime / 60)} mins (All time)</span></div>
+            <div class="stat-labels"><strong>${subject}</strong><span>${formatToHoursMins(data.totalTime)} (All time)</span></div>
             <div class="progress-track"><div class="progress-fill" style="width: ${percent}%"></div></div>
             <div class="stat-labels" style="font-size: 0.75em; margin-top: 4px; color: var(--text-muted);"><span>Strongest: ${highest.substring(0, 25)}...</span></div>
         </div>`;
@@ -1233,12 +1244,22 @@ function showDailyDetails(dateStr) {
 
   let html = "";
   for (const [subject, data] of Object.entries(dayData)) {
-    html += `<div class="detail-subject-block"><h4>${subject} <span class="badge">${Math.round(data.totalTime / 60)} mins</span></h4><ul class="topic-list">`;
+    html += `<div class="detail-subject-block"><h4>${subject} <span class="badge">${formatToHoursMins(data.totalTime)}</span></h4><ul class="topic-list">`;
     for (const [topic, topicData] of Object.entries(data.topics)) {
       let timeSec = typeof topicData === "number" ? topicData : topicData.time;
       let notes =
         typeof topicData === "object" && topicData.notes ? topicData.notes : [];
-      html += `<li><span class="topic-name">${topic}</span> <span class="topic-time">${Math.round(timeSec / 60)}m</span></li>`;
+      
+      let topicDuration = "";
+      if (timeSec > 0 && timeSec < 60) {
+        topicDuration = "<1m";
+      } else {
+        const th = Math.floor(timeSec / 3600);
+        const tm = Math.floor((timeSec % 3600) / 60);
+        topicDuration = th > 0 ? `${th}h ${tm}m` : `${tm}m`;
+      }
+
+      html += `<li><span class="topic-name">${topic}</span> <span class="topic-time">${topicDuration}</span></li>`;
       if (notes.length > 0) {
         html += `<ul style="font-size: 0.85em; color: var(--text-muted); margin-bottom: 8px; padding-left: 20px; list-style-type: decimal;">`;
         notes.forEach((note) => {
