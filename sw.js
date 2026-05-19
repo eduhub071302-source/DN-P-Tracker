@@ -9,6 +9,9 @@ const urlsToCache = [
   "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css",
 ];
 
+let timerIntervalId = null;
+let sessionData = null;
+
 // Install a service worker
 self.addEventListener("install", (event) => {
   self.skipWaiting(); // Force the waiting SW to become active immediately
@@ -73,3 +76,78 @@ self.addEventListener("notificationclick", (event) => {
       }),
   );
 });
+
+// Message listener for live tracking processing inside the background worker execution thread
+self.addEventListener("message", (event) => {
+  if (!event.data) return;
+
+  if (event.data.action === "startBackgroundTimer") {
+    sessionData = event.data.session;
+    startBackgroundLoop();
+  } else if (event.data.action === "stopBackgroundTimer") {
+    stopBackgroundLoop();
+  }
+});
+
+function formatTime(totalSeconds) {
+  const h = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const m = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const s = String(totalSeconds % 60).padStart(2, "0");
+  return `${h}:${m}:${s}`;
+}
+
+function startBackgroundLoop() {
+  if (timerIntervalId) clearInterval(timerIntervalId);
+
+  timerIntervalId = setInterval(() => {
+    if (!sessionData) {
+      clearInterval(timerIntervalId);
+      return;
+    }
+
+    const elapsedSeconds = Math.floor(
+      (Date.now() - sessionData.startTime) / 1000,
+    );
+    let displayTime = "";
+    let bodyText = "";
+
+    if (sessionData.isPomodoro) {
+      const totalPomoSeconds = sessionData.defaultPomoMins * 60;
+      const remaining = totalPomoSeconds - elapsedSeconds;
+
+      if (remaining <= 0) {
+        displayTime = "00:00:00";
+        bodyText = `🚨 Pomodoro Complete! Take a break. [${sessionData.subject}]`;
+        clearInterval(timerIntervalId);
+      } else {
+        displayTime = formatTime(remaining);
+        bodyText = `⏱️ Remaining: ${displayTime} | ${sessionData.subject} - ${sessionData.topic}`;
+      }
+    } else {
+      displayTime = formatTime(elapsedSeconds);
+      bodyText = `⏱️ Elapsed Time: ${displayTime} | ${sessionData.subject} - ${sessionData.topic}`;
+    }
+
+    self.registration.showNotification("DN P Tracker PRO", {
+      body: bodyText,
+      icon: "https://cdn-icons-png.flaticon.com/512/3135/3135692.png",
+      tag: "study-session",
+      renotify: false,
+      silent: true, // Prevents consistent annoying device vibrate notification sound loops every second
+      sticky: true,
+    });
+  }, 1000);
+}
+
+function stopBackgroundLoop() {
+  if (timerIntervalId) {
+    clearInterval(timerIntervalId);
+    timerIntervalId = null;
+  }
+  sessionData = null;
+  self.registration
+    .getNotifications({ tag: "study-session" })
+    .then((notifications) => {
+      notifications.forEach((n) => n.close());
+    });
+}
