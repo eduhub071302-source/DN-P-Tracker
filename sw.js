@@ -20,7 +20,7 @@ self.addEventListener("install", (event) => {
   );
 });
 
-// Update a service worker (Fixed the whitelist bug that was deleting your cache)
+// Update a service worker
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -28,7 +28,6 @@ self.addEventListener("activate", (event) => {
       .then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
-            // Delete ANY cache that isn't our current version
             if (cacheName !== CACHE_NAME) {
               return caches.delete(cacheName);
             }
@@ -41,13 +40,11 @@ self.addEventListener("activate", (event) => {
 
 // Cache and return requests (Network First strategy for GitHub Pages)
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
   if (event.request.method !== "GET") return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // If network fetch is successful, clone it and update the cache
         if (response && response.status === 200 && response.type === "basic") {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -57,8 +54,22 @@ self.addEventListener("fetch", (event) => {
         return response;
       })
       .catch(() => {
-        // If network fails (offline), fallback to cache
         return caches.match(event.request);
+      }),
+  );
+});
+
+// Handle mini notification touch response to foreground the app window
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientList) => {
+        if (clientList.length > 0) {
+          return clientList[0].focus();
+        }
+        return clients.openWindow("./");
       }),
   );
 });
