@@ -147,7 +147,9 @@ const loudAlarmSound = new Audio(
 loudAlarmSound.volume = 1.0;
 
 // Programmatic Silent Audio to preserve lock-screen media state
-const silentAudioLoop = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+const silentAudioLoop = new Audio(
+  "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==",
+);
 silentAudioLoop.loop = true;
 
 // --- State ---
@@ -585,7 +587,7 @@ async function generateReportPDF() {
         for (const [topic, topicData] of Object.entries(data.topics)) {
           let timeSec =
             typeof topicData === "number" ? topicData : topicData.time;
-          
+
           let durationText = "";
           if (timeSec > 0 && timeSec < 60) {
             durationText = "<1m";
@@ -878,12 +880,20 @@ function startTimerLoop(startTimeEpoch) {
       if (pomodoroSeconds <= 0) {
         pomodoroSeconds = 0;
         timeDisplay.textContent = formatTime(0);
-        loudAlarmSound.play().catch((e) => console.log("Audio play blocked by browser."));
-        
+        loudAlarmSound
+          .play()
+          .catch((e) => console.log("Audio play blocked by browser."));
+
         localStorage.removeItem("dnp_activeSession");
+
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            action: "stopBackgroundTimer",
+          });
+        }
         clearMediaSession();
         endSession(totalPomoSeconds);
-        
+
         setTimeout(() => {
           alert("Pomodoro Complete! Take a break.");
           loudAlarmSound.pause();
@@ -906,7 +916,7 @@ function checkActiveSession() {
     currentTopic = activeSession.topic;
 
     streamSelect.value = activeSession.stream;
-    
+
     // Rebuild Subject dropdown items
     subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
     if (activeSession.stream && streams[activeSession.stream]) {
@@ -921,13 +931,19 @@ function checkActiveSession() {
 
     // Rebuild Topic dropdown items
     topicSelect.innerHTML = '<option value="">-- Select Topic --</option>';
-    if (activeSession.stream && activeSession.subject && streams[activeSession.stream].subjects[activeSession.subject]) {
-      streams[activeSession.stream].subjects[activeSession.subject].forEach((topic) => {
-        let opt = document.createElement("option");
-        opt.value = topic;
-        opt.textContent = topic;
-        topicSelect.appendChild(opt);
-      });
+    if (
+      activeSession.stream &&
+      activeSession.subject &&
+      streams[activeSession.stream].subjects[activeSession.subject]
+    ) {
+      streams[activeSession.stream].subjects[activeSession.subject].forEach(
+        (topic) => {
+          let opt = document.createElement("option");
+          opt.value = topic;
+          opt.textContent = topic;
+          topicSelect.appendChild(opt);
+        },
+      );
     }
     topicSelect.value = activeSession.topic;
 
@@ -953,6 +969,12 @@ function checkActiveSession() {
     pomodoroToggle.disabled = true;
     pomoTimeInput.disabled = true;
 
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        action: "stopBackgroundTimer",
+      });
+    }
+
     silentAudioLoop.play().catch(() => console.log("Silent loop ready."));
     startTimerLoop(activeSession.startTime);
     setupMediaSession();
@@ -960,23 +982,27 @@ function checkActiveSession() {
 }
 
 function setupMediaSession() {
-  if ('mediaSession' in navigator) {
+  if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: `Studying: ${currentTopic || 'Session'}`,
-      artist: `Subject: ${currentSubject || 'General'}`,
-      album: 'DN P Tracker PRO',
+      title: `Studying: ${currentTopic || "Session"}`,
+      artist: `Subject: ${currentSubject || "General"}`,
+      album: "DN P Tracker PRO",
       artwork: [
-        { src: 'https://cdn-icons-png.flaticon.com/512/3135/3135692.png', sizes: '192x192', type: 'image/png' }
-      ]
+        {
+          src: "https://cdn-icons-png.flaticon.com/512/3135/3135692.png",
+          sizes: "192x192",
+          type: "image/png",
+        },
+      ],
     });
-    navigator.mediaSession.setActionHandler('stop', () => {
+    navigator.mediaSession.setActionHandler("stop", () => {
       if (finishBtn && !finishBtn.disabled) finishBtn.click();
     });
   }
 }
 
 function clearMediaSession() {
-  if ('mediaSession' in navigator) {
+  if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = null;
   }
   silentAudioLoop.pause();
@@ -1006,7 +1032,7 @@ function endSession(timeToSave) {
 startBtn.addEventListener("click", () => {
   if (!subjectSelect.value || !topicSelect.value)
     return alert("Please select a subject and topic first!");
-  
+
   isRunning = true;
   currentSubject = subjectSelect.value;
   currentTopic = topicSelect.value;
@@ -1029,11 +1055,13 @@ startBtn.addEventListener("click", () => {
     topic: topicSelect.value,
     isPomodoro: pomodoroToggle.checked,
     defaultPomoMins: parseInt(pomoTimeInput.value) || 25,
-    notes: [...currentSessionNotes]
+    notes: [...currentSessionNotes],
   };
   localStorage.setItem("dnp_activeSession", JSON.stringify(activeSessionData));
 
-  silentAudioLoop.play().catch((e) => console.log("Audio lock framework initialized."));
+  silentAudioLoop
+    .play()
+    .catch((e) => console.log("Audio lock framework initialized."));
   startTimerLoop(startTimeEpoch);
   setupMediaSession();
 });
@@ -1041,9 +1069,11 @@ startBtn.addEventListener("click", () => {
 finishBtn.addEventListener("click", () => {
   const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
   let calculatedTime = 0;
-  
+
   if (activeSession) {
-    const calculatedDuration = Math.floor((Date.now() - activeSession.startTime) / 1000);
+    const calculatedDuration = Math.floor(
+      (Date.now() - activeSession.startTime) / 1000,
+    );
     calculatedTime = pomodoroToggle.checked
       ? Math.min(defaultPomoMins * 60, calculatedDuration)
       : calculatedDuration;
@@ -1054,16 +1084,19 @@ finishBtn.addEventListener("click", () => {
   }
 
   localStorage.removeItem("dnp_activeSession");
-  clearMediaSession();
-  
+
   if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-    navigator.serviceWorker.ready.then(reg => {
-      reg.getNotifications({ tag: "study-session" }).then(notifications => {
-        notifications.forEach(n => n.close());
+    navigator.serviceWorker.controller.postMessage({
+      action: "stopBackgroundTimer",
+    });
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.getNotifications({ tag: "study-session" }).then((notifications) => {
+        notifications.forEach((n) => n.close());
       });
     });
   }
 
+  clearMediaSession();
   endSession(calculatedTime);
 });
 
@@ -1185,8 +1218,11 @@ function updateDashboardUI() {
 
   let totalSecs = getFilteredTotalSeconds();
 
-  document.getElementById("totalHoursText").textContent = formatToHoursMins(totalSecs);
-  document.getElementById("todayMinsText").textContent = formatToHoursMins(dailyData[today] || 0);
+  document.getElementById("totalHoursText").textContent =
+    formatToHoursMins(totalSecs);
+  document.getElementById("todayMinsText").textContent = formatToHoursMins(
+    dailyData[today] || 0,
+  );
   document.getElementById("streakText").textContent = `${streak} Days`;
 
   renderChart(dailyDetailed, history);
@@ -1401,7 +1437,7 @@ function showDailyDetails(dateStr) {
       let timeSec = typeof topicData === "number" ? topicData : topicData.time;
       let notes =
         typeof topicData === "object" && topicData.notes ? topicData.notes : [];
-      
+
       let topicDuration = "";
       if (timeSec > 0 && timeSec < 60) {
         topicDuration = "<1m";
@@ -1620,34 +1656,39 @@ document.addEventListener("visibilitychange", () => {
     appData = JSON.parse(localStorage.getItem("dnp_appData")) || {
       streams: defaultStreams,
     };
-    
+
     if (activeSession && isRunning) {
       startTimerLoop(activeSession.startTime);
     }
-    
+
     updateDashboardUI();
     loadUserProfile();
 
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then(reg => {
-        reg.getNotifications({ tag: "study-session" }).then(notifications => {
-          notifications.forEach(n => n.close());
-        });
+      navigator.serviceWorker.controller.postMessage({
+        action: "stopBackgroundTimer",
       });
     }
   } else {
-    // If user minimizes app or leaves, dispatch a push-card monitoring reminder
-    if (activeSession && isRunning && "Notification" in window && Notification.permission === "granted") {
-      navigator.serviceWorker.ready.then((registration) => {
-        registration.showNotification("DN P Tracker PRO", {
-          body: `⏱️ Study Session Active: ${activeSession.subject} - ${activeSession.topic}`,
-          icon: "https://cdn-icons-png.flaticon.com/512/3135/3135692.png",
-          tag: "study-session",
-          renotify: false,
-          silent: true,
-          sticky: true
+    // If user minimizes app or leaves, dispatch a message to setup a progressive push card loop
+    if (
+      activeSession &&
+      isRunning &&
+      "Notification" in window &&
+      Notification.permission === "granted"
+    ) {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          action: "startBackgroundTimer",
+          session: {
+            startTime: activeSession.startTime,
+            subject: activeSession.subject,
+            topic: activeSession.topic,
+            isPomodoro: activeSession.isPomodoro,
+            defaultPomoMins: activeSession.defaultPomoMins,
+          },
         });
-      });
+      }
     }
   }
 });
