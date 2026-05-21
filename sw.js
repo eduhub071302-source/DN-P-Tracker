@@ -1,4 +1,4 @@
-const CACHE_NAME = "dnp-tracker-v13";
+const CACHE_NAME = "dnp-tracker-v14";
 const urlsToCache = [
   "./",
   "./index.html",
@@ -108,6 +108,20 @@ function startBackgroundLoop() {
     const elapsedSeconds = Math.floor(
       (Date.now() - sessionData.startTime) / 1000,
     );
+
+    // Force background crash-cap at 90 Minutes (Pitstop Rule)
+    if (elapsedSeconds >= 5400) {
+      self.registration.showNotification("DN P Tracker PRO", {
+        body: `🚨 Pitstop Rule Applied! Session capped at 90 mins and saved safely.`,
+        icon: "https://cdn-icons-png.flaticon.com/512/3135/3135692.png",
+        tag: "study-session",
+        renotify: true,
+        sticky: false,
+      });
+      stopBackgroundLoop();
+      return;
+    }
+
     let displayTime = "";
     let bodyText = "";
 
