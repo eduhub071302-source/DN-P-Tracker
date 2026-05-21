@@ -660,6 +660,14 @@ document.getElementById("sharePdfBtn").addEventListener("click", async () => {
   btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Generating...`;
   btn.disabled = true;
 
+  for (let dateStr in dailyDetailed) {
+    let [y, m, d] = dateStr.split("-");
+    const loopDate = new Date(y, m - 1, d);
+    if (loopDate >= startBoundary && loopDate <= endBoundary) {
+      activeDates.push(dateStr);
+    }
+  }
+
   try {
     const { pdf, pdfBlob, fileName, profile, timeframe } =
       await generateReportPDF();
@@ -1802,4 +1810,3 @@ document.addEventListener("visibilitychange", () => {
 });
 
 updateDashboardUI();
-}
