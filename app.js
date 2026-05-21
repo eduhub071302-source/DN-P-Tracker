@@ -154,6 +154,7 @@ silentAudioLoop.loop = true;
 
 // --- State ---
 let timerInterval;
+let cooldownInterval;
 let secondsElapsed = 0;
 let defaultPomoMins = parseInt(pomoTimeInput.value) || 25;
 let pomodoroSeconds = defaultPomoMins * 60;
@@ -422,6 +423,7 @@ function showMotivationPopup(profile) {
 window.addEventListener("DOMContentLoaded", () => {
   loadUserProfile();
   checkActiveSession();
+  checkCooldownState();
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
   }
@@ -658,6 +660,14 @@ document.getElementById("sharePdfBtn").addEventListener("click", async () => {
   btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Generating...`;
   btn.disabled = true;
 
+  for (let dateStr in dailyDetailed) {
+    let [y, m, d] = dateStr.split("-");
+    const loopDate = new Date(y, m - 1, d);
+    if (loopDate >= startBoundary && loopDate <= endBoundary) {
+      activeDates.push(dateStr);
+    }
+  }
+
   try {
     const { pdf, pdfBlob, fileName, profile, timeframe } =
       await generateReportPDF();
@@ -864,6 +874,49 @@ function updatePomoDisplay() {
 pomodoroToggle.addEventListener("change", updatePomoDisplay);
 pomoTimeInput.addEventListener("change", updatePomoDisplay);
 
+// --- Voice Alarm System ---
+function runPitstopVocalAlert() {
+  loudAlarmSound.play().catch((e) => console.log("Audio kick blocked."));
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel(); // Clears text backlog queue
+    const utterance = new SpeechSynthesisUtterance("time to pitstop");
+    utterance.volume = 1.0;
+    utterance.rate = 0.9;
+    window.speechSynthesis.speak(utterance);
+  }
+}
+
+// --- Cooldown Manager ---
+function triggerPitstopCooldown() {
+  const cooldownDuration = 3 * 60 * 1000; // 3 Minutes
+  const cooldownEndEpoch = Date.now() + cooldownDuration;
+  localStorage.setItem("dnp_cooldownEnd", cooldownEndEpoch);
+  checkCooldownState();
+}
+
+function checkCooldownState() {
+  const endEpoch = parseInt(localStorage.getItem("dnp_cooldownEnd")) || 0;
+  if (endEpoch > Date.now()) {
+    startBtn.disabled = true;
+    if (cooldownInterval) clearInterval(cooldownInterval);
+    
+    cooldownInterval = setInterval(() => {
+      const remainingMs = endEpoch - Date.now();
+      if (remainingMs <= 0) {
+        clearInterval(cooldownInterval);
+        localStorage.removeItem("dnp_cooldownEnd");
+        startBtn.disabled = false;
+        startBtn.innerHTML = '<i class="fas fa-play"></i> Start';
+      } else {
+        const totalSecs = Math.ceil(remainingMs / 1000);
+        const mins = String(Math.floor(totalSecs / 60)).padStart(2, "0");
+        const secs = String(totalSecs % 60).padStart(2, "0");
+        startBtn.innerHTML = `<i class="fas fa-hourglass-half"></i> Pitstop (${mins}:${secs})`;
+      }
+    }, 1000);
+  }
+}
+
 // Persistent Absolute Time Logic
 function startTimerLoop(startTimeEpoch) {
   if (timerInterval) clearInterval(timerInterval);
@@ -874,6 +927,30 @@ function startTimerLoop(startTimeEpoch) {
   timerInterval = setInterval(() => {
     const elapsedSeconds = Math.floor((Date.now() - startTimeEpoch) / 1000);
     secondsElapsed = elapsedSeconds;
+
+    // Hard Pitstop Ceiling Rule (90 Minutes cap = 5400 seconds)
+    if (elapsedSeconds >= 5400) {
+      clearInterval(timerInterval);
+      timeDisplay.textContent = formatTime(5400);
+      localStorage.removeItem("dnp_activeSession");
+
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          action: "stopBackgroundTimer",
+        });
+      }
+      clearMediaSession();
+      runPitstopVocalAlert();
+      endSession(5400);
+      triggerPitstopCooldown();
+
+      setTimeout(() => {
+        alert("90 Minutes Limit Reached! Session saved. Time to pitstop.");
+        loudAlarmSound.pause();
+        loudAlarmSound.currentTime = 0;
+      }, 500);
+      return;
+    }
 
     if (isPomodoro) {
       pomodoroSeconds = totalPomoSeconds - elapsedSeconds;
@@ -911,6 +988,22 @@ function startTimerLoop(startTimeEpoch) {
 function checkActiveSession() {
   const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
   if (activeSession) {
+    const backgroundElapsed = Math.floor((Date.now() - activeSession.startTime) / 1000);
+    
+    // Check if 90-minute ceiling expired while app context was terminated
+    if (backgroundElapsed >= 5400) {
+      currentSubject = activeSession.subject;
+      currentTopic = activeSession.topic;
+      currentSessionNotes = activeSession.notes || [];
+      localStorage.removeItem("dnp_activeSession");
+      clearMediaSession();
+      runPitstopVocalAlert();
+      endSession(5400);
+      triggerPitstopCooldown();
+      alert("Background Session hit the 90-minute mark and auto-deployed! Time to pitstop.");
+      return;
+    }
+
     isRunning = true;
     currentSubject = activeSession.subject;
     currentTopic = activeSession.topic;
@@ -1016,7 +1109,13 @@ function endSession(timeToSave) {
   ]);
   secondsElapsed = 0;
   updatePomoDisplay();
-  startBtn.disabled = false;
+  
+  // Re-enable validation check for starting a session
+  const endEpoch = parseInt(localStorage.getItem("dnp_cooldownEnd")) || 0;
+  if (endEpoch <= Date.now()) {
+    startBtn.disabled = false;
+  }
+  
   finishBtn.disabled = true;
   streamSelect.disabled = false;
   subjectSelect.disabled = false;
@@ -1030,6 +1129,7 @@ function endSession(timeToSave) {
 }
 
 startBtn.addEventListener("click", () => {
+  if (parseInt(localStorage.getItem("dnp_cooldownEnd")) > Date.now()) return;
   if (!subjectSelect.value || !topicSelect.value)
     return alert("Please select a subject and topic first!");
 
@@ -1657,7 +1757,23 @@ document.addEventListener("visibilitychange", () => {
       streams: defaultStreams,
     };
 
+    checkCooldownState();
+
     if (activeSession && isRunning) {
+      const backgroundElapsed = Math.floor((Date.now() - activeSession.startTime) / 1000);
+      if (backgroundElapsed >= 5400) {
+        // Handle pitstop state calculation if reached while minimized
+        currentSubject = activeSession.subject;
+        currentTopic = activeSession.topic;
+        currentSessionNotes = activeSession.notes || [];
+        localStorage.removeItem("dnp_activeSession");
+        clearMediaSession();
+        runPitstopVocalAlert();
+        endSession(5400);
+        triggerPitstopCooldown();
+        alert("Session reached the 90-minute limit and was deployed! Time to pitstop.");
+        return;
+      }
       startTimerLoop(activeSession.startTime);
     }
 
