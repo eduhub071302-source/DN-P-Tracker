@@ -84,6 +84,8 @@ const defaultStreams = {
       Biology: defaultSyllabusData.biology,
       Physics: defaultSyllabusData.physics,
       Chemistry: defaultSyllabusData.chemistry,
+      English: [],
+      "General Knowledge": [],
     },
   },
   "Physical Science": {
@@ -91,8 +93,36 @@ const defaultStreams = {
       "Combined Maths": defaultSyllabusData.combinedMaths,
       Physics: defaultSyllabusData.physics,
       Chemistry: defaultSyllabusData.chemistry,
+      English: [],
+      "General Knowledge": [],
     },
   },
+};
+
+const practiceData = {
+  "Biology": [
+    "MCQ Practice (PP)", "Part A Practice (PP)", "Part B Practice (PP)",
+    "MCQ Practice (MP)", "Part A Practice (MP)", "Part B Practice (MP)"
+  ],
+  "Combined Maths": [
+    "1 - Part A Practice (PP)", "1 - Part B Practice (PP)", "2 - Part A Practice (PP)", 
+    "2 - Part B Practice (PP)", "1 - Part A Practice (MP)", "1 - Part B Practice (MP)", 
+    "2 - Part A Practice (MP)", "2 - Part B Practice (MP)"
+  ],
+  "Chemistry": [
+    "MCQ Practice (PP)", "Part A Practice (PP)", "Part B Practice (PP)",
+    "MCQ Practice (MP)", "Part A Practice (MP)", "Part B Practice (MP)"
+  ],
+  "Physics": [
+    "PVG Practice", "MCQ Practice (PP)", "Part A Practice (PP)", "Part B Practice (PP)",
+    "MCQ Practice (MP)", "Part A Practice (MP)", "Part B Practice (MP)"
+  ],
+  "English": [
+    "Past Paper Practice", "Grammar Practice", "Vocabulary Practice"
+  ],
+  "General Knowledge": [
+    "Past Paper Practice", "Searching New Knowledge"
+  ]
 };
 
 // Initialize App Data securely
@@ -102,9 +132,26 @@ if (appData && appData.streams && appData.streams["Biology Science"]) {
   if (appData.streams["Biology Science"].subjects.Biology.length <= 3)
     needsUpdate = true;
 }
+
 if (!appData || !appData.streams || needsUpdate) {
   appData = { streams: defaultStreams };
   localStorage.setItem("dnp_appData", JSON.stringify(appData));
+} else {
+  // Safe migration for existing users: Ensure English and General Knowledge exist
+  let migrated = false;
+  Object.keys(appData.streams).forEach((stream) => {
+    if (!appData.streams[stream].subjects["English"]) {
+      appData.streams[stream].subjects["English"] = [];
+      migrated = true;
+    }
+    if (!appData.streams[stream].subjects["General Knowledge"]) {
+      appData.streams[stream].subjects["General Knowledge"] = [];
+      migrated = true;
+    }
+  });
+  if (migrated) {
+    localStorage.setItem("dnp_appData", JSON.stringify(appData));
+  }
 }
 const streams = appData.streams;
 
@@ -112,6 +159,7 @@ const streams = appData.streams;
 const streamSelect = document.getElementById("streamSelect");
 const subjectSelect = document.getElementById("subjectSelect");
 const topicSelect = document.getElementById("topicSelect");
+const practiceSelect = document.getElementById("practiceSelect");
 const startBtn = document.getElementById("startBtn");
 const finishBtn = document.getElementById("finishBtn");
 const timeDisplay = document.getElementById("timeDisplay");
@@ -631,7 +679,7 @@ async function generateReportPDF() {
 
         pdf.autoTable({
           startY: currentY,
-          head: [["Subject", "Topic", "Duration", "Notes"]],
+          head: [["Subject", "Topic/Practice", "Duration", "Notes"]],
           body: tableBody,
           theme: "grid",
           headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255] },
@@ -769,14 +817,23 @@ mainDashboard.addEventListener("mousemove", (e) => {
 });
 
 // Notes Logic
-topicSelect.addEventListener("change", (e) => {
-  if (e.target.value) {
+function checkNotesSection() {
+  if (topicSelect.value || practiceSelect.value) {
     notesSection.style.display = "block";
-    resetNotes();
   } else {
     notesSection.style.display = "none";
   }
+}
+
+topicSelect.addEventListener("change", () => {
+  checkNotesSection();
+  resetNotes();
 });
+practiceSelect.addEventListener("change", () => {
+  checkNotesSection();
+  resetNotes();
+});
+
 function resetNotes() {
   currentSessionNotes = [];
   sessionNotesList.innerHTML = "";
@@ -812,8 +869,10 @@ streamSelect.addEventListener("change", (e) => {
   const stream = e.target.value;
   subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
   topicSelect.innerHTML = '<option value="">Select Subject First</option>';
+  practiceSelect.innerHTML = '<option value="">Select Subject First</option>';
   subjectSelect.disabled = !stream;
   topicSelect.disabled = true;
+  practiceSelect.disabled = true;
   notesSection.style.display = "none";
   if (stream) {
     Object.keys(streams[stream].subjects).forEach((sub) => {
@@ -824,19 +883,43 @@ streamSelect.addEventListener("change", (e) => {
     });
   }
 });
+
 subjectSelect.addEventListener("change", (e) => {
   const stream = streamSelect.value;
   const subject = e.target.value;
   topicSelect.innerHTML = '<option value="">-- Select Topic --</option>';
+  practiceSelect.innerHTML = '<option value="">-- Select Practice --</option>';
   topicSelect.disabled = !subject;
+  practiceSelect.disabled = !subject;
   notesSection.style.display = "none";
+  
   if (subject) {
-    streams[stream].subjects[subject].forEach((topic) => {
-      let opt = document.createElement("option");
-      opt.value = topic;
-      opt.textContent = topic;
-      topicSelect.appendChild(opt);
-    });
+    // Populate Topics
+    const topics = streams[stream].subjects[subject];
+    if (topics && topics.length > 0) {
+      topics.forEach((topic) => {
+        let opt = document.createElement("option");
+        opt.value = topic;
+        opt.textContent = topic;
+        topicSelect.appendChild(opt);
+      });
+    } else {
+      topicSelect.innerHTML = '<option value="">No Topics Available</option>';
+      topicSelect.disabled = true;
+    }
+
+    // Populate Practices
+    if (practiceData[subject] && practiceData[subject].length > 0) {
+      practiceData[subject].forEach((prac) => {
+        let opt = document.createElement("option");
+        opt.value = prac;
+        opt.textContent = prac;
+        practiceSelect.appendChild(opt);
+      });
+    } else {
+      practiceSelect.innerHTML = '<option value="">No Practice Available</option>';
+      practiceSelect.disabled = true;
+    }
   }
 });
 
@@ -1021,16 +1104,34 @@ function checkActiveSession() {
       activeSession.subject &&
       streams[activeSession.stream].subjects[activeSession.subject]
     ) {
-      streams[activeSession.stream].subjects[activeSession.subject].forEach(
-        (topic) => {
-          let opt = document.createElement("option");
-          opt.value = topic;
-          opt.textContent = topic;
-          topicSelect.appendChild(opt);
-        },
-      );
+      const topics = streams[activeSession.stream].subjects[activeSession.subject];
+      if (topics && topics.length > 0) {
+        topics.forEach((topic) => {
+            let opt = document.createElement("option");
+            opt.value = topic;
+            opt.textContent = topic;
+            topicSelect.appendChild(opt);
+          },
+        );
+      } else {
+        topicSelect.innerHTML = '<option value="">No Topics Available</option>';
+      }
     }
-    topicSelect.value = activeSession.topic;
+    topicSelect.value = activeSession.topicSelection || activeSession.topic || "";
+
+    // Rebuild Practice dropdown items
+    practiceSelect.innerHTML = '<option value="">-- Select Practice --</option>';
+    if (activeSession.subject && practiceData[activeSession.subject]) {
+      practiceData[activeSession.subject].forEach((prac) => {
+        let opt = document.createElement("option");
+        opt.value = prac;
+        opt.textContent = prac;
+        practiceSelect.appendChild(opt);
+      });
+    } else {
+        practiceSelect.innerHTML = '<option value="">No Practice Available</option>';
+    }
+    practiceSelect.value = activeSession.practiceSelection || "";
 
     pomodoroToggle.checked = activeSession.isPomodoro;
     pomoTimeInput.value = activeSession.defaultPomoMins;
@@ -1044,13 +1145,14 @@ function checkActiveSession() {
       sessionNotesList.appendChild(li);
     });
     notePrefix.textContent = `${currentSessionNotes.length + 1}.`;
-    notesSection.style.display = currentTopic ? "block" : "none";
+    checkNotesSection();
 
     startBtn.disabled = true;
     finishBtn.disabled = false;
     streamSelect.disabled = true;
     subjectSelect.disabled = true;
     topicSelect.disabled = true;
+    practiceSelect.disabled = true;
     pomodoroToggle.disabled = true;
     pomoTimeInput.disabled = true;
 
@@ -1111,7 +1213,15 @@ function endSession(timeToSave) {
   finishBtn.disabled = true;
   streamSelect.disabled = false;
   subjectSelect.disabled = false;
-  topicSelect.disabled = false;
+  
+  // Conditionally re-enable based on current subject
+  if (streams[streamSelect.value]?.subjects[subjectSelect.value]?.length > 0) {
+      topicSelect.disabled = false;
+  }
+  if (practiceData[subjectSelect.value]) {
+      practiceSelect.disabled = false;
+  }
+  
   pomodoroToggle.disabled = false;
   pomoTimeInput.disabled = false;
   noteInput.disabled = false;
@@ -1122,17 +1232,24 @@ function endSession(timeToSave) {
 
 startBtn.addEventListener("click", () => {
   if (parseInt(localStorage.getItem("dnp_cooldownEnd")) > Date.now()) return;
-  if (!subjectSelect.value || !topicSelect.value)
-    return alert("Please select a subject and topic first!");
+  if (!subjectSelect.value || (!topicSelect.value && !practiceSelect.value))
+    return alert("Please select a subject, and at least one topic or practice!");
 
   isRunning = true;
   currentSubject = subjectSelect.value;
-  currentTopic = topicSelect.value;
+  
+  let t = topicSelect.value;
+  let p = practiceSelect.value;
+  if (t && p) currentTopic = t + " | " + p;
+  else if (t) currentTopic = t;
+  else currentTopic = p;
+
   startBtn.disabled = true;
   finishBtn.disabled = false;
   streamSelect.disabled = true;
   subjectSelect.disabled = true;
   topicSelect.disabled = true;
+  practiceSelect.disabled = true;
   pomodoroToggle.disabled = true;
   pomoTimeInput.disabled = true;
 
@@ -1144,7 +1261,9 @@ startBtn.addEventListener("click", () => {
     startTime: startTimeEpoch,
     stream: streamSelect.value,
     subject: subjectSelect.value,
-    topic: topicSelect.value,
+    topic: currentTopic, // The composite string to be saved later
+    topicSelection: t, // the raw ui selection
+    practiceSelection: p, // the raw ui selection
     isPomodoro: pomodoroToggle.checked,
     defaultPomoMins: parseInt(pomoTimeInput.value) || 25,
     notes: [...currentSessionNotes],
@@ -1428,6 +1547,8 @@ function renderChart(dailyDetailed, history) {
     Physics: { border: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
     Chemistry: { border: "#10b981", bg: "rgba(16, 185, 129, 0.1)" },
     "Combined Maths": { border: "#f59e0b", bg: "rgba(245, 158, 11, 0.1)" },
+    "English": { border: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
+    "General Knowledge": { border: "#06b6d4", bg: "rgba(6, 182, 212, 0.1)" },
   };
 
   let subjects = Object.keys(history);
