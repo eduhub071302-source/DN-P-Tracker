@@ -100,29 +100,43 @@ const defaultStreams = {
 };
 
 const practiceData = {
-  "Biology": [
-    "MCQ Practice (PP)", "Part A Practice (PP)", "Part B Practice (PP)",
-    "MCQ Practice (MP)", "Part A Practice (MP)", "Part B Practice (MP)"
+  Biology: [
+    "MCQ Practice (PP)",
+    "Part A Practice (PP)",
+    "Part B Practice (PP)",
+    "MCQ Practice (MP)",
+    "Part A Practice (MP)",
+    "Part B Practice (MP)",
   ],
   "Combined Maths": [
-    "1 - Part A Practice (PP)", "1 - Part B Practice (PP)", "2 - Part A Practice (PP)", 
-    "2 - Part B Practice (PP)", "1 - Part A Practice (MP)", "1 - Part B Practice (MP)", 
-    "2 - Part A Practice (MP)", "2 - Part B Practice (MP)"
+    "1 - Part A Practice (PP)",
+    "1 - Part B Practice (PP)",
+    "2 - Part A Practice (PP)",
+    "2 - Part B Practice (PP)",
+    "1 - Part A Practice (MP)",
+    "1 - Part B Practice (MP)",
+    "2 - Part A Practice (MP)",
+    "2 - Part B Practice (MP)",
   ],
-  "Chemistry": [
-    "MCQ Practice (PP)", "Part A Practice (PP)", "Part B Practice (PP)",
-    "MCQ Practice (MP)", "Part A Practice (MP)", "Part B Practice (MP)"
+  Chemistry: [
+    "MCQ Practice (PP)",
+    "Part A Practice (PP)",
+    "Part B Practice (PP)",
+    "MCQ Practice (MP)",
+    "Part A Practice (MP)",
+    "Part B Practice (MP)",
   ],
-  "Physics": [
-    "PVG Practice", "MCQ Practice (PP)", "Part A Practice (PP)", "Part B Practice (PP)",
-    "MCQ Practice (MP)", "Part A Practice (MP)", "Part B Practice (MP)"
+  Physics: [
+    "PVG Practice",
+    "MCQ Practice (PP)",
+    "Part A Practice (PP)",
+    "Part B Practice (PP)",
+    "MCQ Practice (MP)",
+    "Part A Practice (MP)",
+    "Part B Practice (MP)",
   ],
-  "English": [
-    "Past Paper Practice", "Grammar Practice", "Vocabulary Practice"
-  ],
-  "General Knowledge": [
-    "Past Paper Practice", "Searching New Knowledge"
-  ]
+  English: ["Past Paper Practice", "Grammar Practice", "Vocabulary Practice"],
+  "General Knowledge": ["Past Paper Practice", "Searching New Knowledge"],
 };
 
 // Initialize App Data securely
@@ -477,6 +491,49 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 });
 
+// --- History Tracker Math Engine (Auto-Advancing Progress Bounds) ---
+function getAnchorWindow(type, anchorValue) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let startBoundary;
+  let endBoundary;
+
+  if (type === "365") {
+    let [y, m] = anchorValue.split("-");
+    startBoundary = new Date(y, m - 1, 1);
+    startBoundary.setHours(0, 0, 0, 0);
+
+    const diffMonths =
+      (today.getFullYear() - startBoundary.getFullYear()) * 12 +
+      (today.getMonth() - startBoundary.getMonth());
+    if (diffMonths >= 0) {
+      const sets = Math.floor(diffMonths / 12);
+      startBoundary.setFullYear(startBoundary.getFullYear() + sets);
+    }
+    endBoundary = new Date(startBoundary);
+    endBoundary.setFullYear(endBoundary.getFullYear() + 1);
+    endBoundary.setDate(endBoundary.getDate() - 1);
+  } else {
+    let [y, m, d] = anchorValue.split("-");
+    startBoundary = new Date(y, m - 1, d);
+    startBoundary.setHours(0, 0, 0, 0);
+
+    const diffTime = today - startBoundary;
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    const span = type === "7" ? 7 : 30; // 7 days or 30 days
+    if (diffDays >= 0) {
+      const sets = Math.floor(diffDays / span);
+      startBoundary.setDate(startBoundary.getDate() + sets * span);
+    }
+    endBoundary = new Date(startBoundary);
+    endBoundary.setDate(endBoundary.getDate() + (span - 1));
+  }
+
+  return { startBoundary, endBoundary };
+}
+
 // --- Share & Download PDF Feature ---
 async function generateReportPDF() {
   const { jsPDF } = window.jspdf;
@@ -583,21 +640,17 @@ async function generateReportPDF() {
     let endBoundary = null;
 
     if (timeframeDropdown.value === "7" && anchors.sevenDayStart) {
-      let [y, m, d] = anchors.sevenDayStart.split("-");
-      startBoundary = new Date(y, m - 1, d);
-      endBoundary = new Date(startBoundary);
-      endBoundary.setDate(endBoundary.getDate() + 6);
+      const bounds = getAnchorWindow("7", anchors.sevenDayStart);
+      startBoundary = bounds.startBoundary;
+      endBoundary = bounds.endBoundary;
     } else if (timeframeDropdown.value === "30" && anchors.oneMonthStart) {
-      let [y, m, d] = anchors.oneMonthStart.split("-");
-      startBoundary = new Date(y, m - 1, d);
-      endBoundary = new Date(startBoundary);
-      endBoundary.setDate(endBoundary.getDate() + 29);
+      const bounds = getAnchorWindow("30", anchors.oneMonthStart);
+      startBoundary = bounds.startBoundary;
+      endBoundary = bounds.endBoundary;
     } else if (timeframeDropdown.value === "365" && anchors.oneYearStart) {
-      let [y, m] = anchors.oneYearStart.split("-");
-      startBoundary = new Date(y, m - 1, 1);
-      endBoundary = new Date(startBoundary);
-      endBoundary.setFullYear(endBoundary.getFullYear() + 1);
-      endBoundary.setDate(endBoundary.getDate() - 1);
+      const bounds = getAnchorWindow("365", anchors.oneYearStart);
+      startBoundary = bounds.startBoundary;
+      endBoundary = bounds.endBoundary;
     } else {
       let days =
         timeframeDropdown.value === "365"
@@ -892,7 +945,7 @@ subjectSelect.addEventListener("change", (e) => {
   topicSelect.disabled = !subject;
   practiceSelect.disabled = !subject;
   notesSection.style.display = "none";
-  
+
   if (subject) {
     // Populate Topics
     const topics = streams[stream].subjects[subject];
@@ -917,7 +970,8 @@ subjectSelect.addEventListener("change", (e) => {
         practiceSelect.appendChild(opt);
       });
     } else {
-      practiceSelect.innerHTML = '<option value="">No Practice Available</option>';
+      practiceSelect.innerHTML =
+        '<option value="">No Practice Available</option>';
       practiceSelect.disabled = true;
     }
   }
@@ -974,7 +1028,7 @@ function checkCooldownState() {
   if (endEpoch > Date.now()) {
     startBtn.disabled = true;
     if (cooldownInterval) clearInterval(cooldownInterval);
-    
+
     cooldownInterval = setInterval(() => {
       const remainingMs = endEpoch - Date.now();
       if (remainingMs <= 0) {
@@ -1063,8 +1117,10 @@ function startTimerLoop(startTimeEpoch) {
 function checkActiveSession() {
   const activeSession = JSON.parse(localStorage.getItem("dnp_activeSession"));
   if (activeSession) {
-    const backgroundElapsed = Math.floor((Date.now() - activeSession.startTime) / 1000);
-    
+    const backgroundElapsed = Math.floor(
+      (Date.now() - activeSession.startTime) / 1000,
+    );
+
     // Check if 90-minute ceiling expired while app context was terminated
     if (backgroundElapsed >= 5400) {
       currentSubject = activeSession.subject;
@@ -1075,7 +1131,9 @@ function checkActiveSession() {
       runPitstopVocalAlert();
       endSession(5400);
       triggerPitstopCooldown();
-      alert("Background Session hit the 90-minute mark and auto-deployed! Time to pitstop.");
+      alert(
+        "Background Session hit the 90-minute mark and auto-deployed! Time to pitstop.",
+      );
       return;
     }
 
@@ -1104,23 +1162,25 @@ function checkActiveSession() {
       activeSession.subject &&
       streams[activeSession.stream].subjects[activeSession.subject]
     ) {
-      const topics = streams[activeSession.stream].subjects[activeSession.subject];
+      const topics =
+        streams[activeSession.stream].subjects[activeSession.subject];
       if (topics && topics.length > 0) {
         topics.forEach((topic) => {
-            let opt = document.createElement("option");
-            opt.value = topic;
-            opt.textContent = topic;
-            topicSelect.appendChild(opt);
-          },
-        );
+          let opt = document.createElement("option");
+          opt.value = topic;
+          opt.textContent = topic;
+          topicSelect.appendChild(opt);
+        });
       } else {
         topicSelect.innerHTML = '<option value="">No Topics Available</option>';
       }
     }
-    topicSelect.value = activeSession.topicSelection || activeSession.topic || "";
+    topicSelect.value =
+      activeSession.topicSelection || activeSession.topic || "";
 
     // Rebuild Practice dropdown items
-    practiceSelect.innerHTML = '<option value="">-- Select Practice --</option>';
+    practiceSelect.innerHTML =
+      '<option value="">-- Select Practice --</option>';
     if (activeSession.subject && practiceData[activeSession.subject]) {
       practiceData[activeSession.subject].forEach((prac) => {
         let opt = document.createElement("option");
@@ -1129,7 +1189,8 @@ function checkActiveSession() {
         practiceSelect.appendChild(opt);
       });
     } else {
-        practiceSelect.innerHTML = '<option value="">No Practice Available</option>';
+      practiceSelect.innerHTML =
+        '<option value="">No Practice Available</option>';
     }
     practiceSelect.value = activeSession.practiceSelection || "";
 
@@ -1203,25 +1264,25 @@ function endSession(timeToSave) {
   ]);
   secondsElapsed = 0;
   updatePomoDisplay();
-  
+
   // Re-enable validation check for starting a session
   const endEpoch = parseInt(localStorage.getItem("dnp_cooldownEnd")) || 0;
   if (endEpoch <= Date.now()) {
     startBtn.disabled = false;
   }
-  
+
   finishBtn.disabled = true;
   streamSelect.disabled = false;
   subjectSelect.disabled = false;
-  
+
   // Conditionally re-enable based on current subject
   if (streams[streamSelect.value]?.subjects[subjectSelect.value]?.length > 0) {
-      topicSelect.disabled = false;
+    topicSelect.disabled = false;
   }
   if (practiceData[subjectSelect.value]) {
-      practiceSelect.disabled = false;
+    practiceSelect.disabled = false;
   }
-  
+
   pomodoroToggle.disabled = false;
   pomoTimeInput.disabled = false;
   noteInput.disabled = false;
@@ -1233,11 +1294,13 @@ function endSession(timeToSave) {
 startBtn.addEventListener("click", () => {
   if (parseInt(localStorage.getItem("dnp_cooldownEnd")) > Date.now()) return;
   if (!subjectSelect.value || (!topicSelect.value && !practiceSelect.value))
-    return alert("Please select a subject, and at least one topic or practice!");
+    return alert(
+      "Please select a subject, and at least one topic or practice!",
+    );
 
   isRunning = true;
   currentSubject = subjectSelect.value;
-  
+
   let t = topicSelect.value;
   let p = practiceSelect.value;
   if (t && p) currentTopic = t + " | " + p;
@@ -1390,18 +1453,17 @@ function getFilteredTotalSeconds() {
   let endBoundary = null;
 
   if (filter === "7" && anchors.sevenDayStart) {
-    startBoundary = new Date(anchors.sevenDayStart);
-    endBoundary = new Date(startBoundary);
-    endBoundary.setDate(endBoundary.getDate() + 6);
+    const bounds = getAnchorWindow("7", anchors.sevenDayStart);
+    startBoundary = bounds.startBoundary;
+    endBoundary = bounds.endBoundary;
   } else if (filter === "30" && anchors.oneMonthStart) {
-    startBoundary = new Date(anchors.oneMonthStart);
-    endBoundary = new Date(startBoundary);
-    endBoundary.setDate(endBoundary.getDate() + 29);
+    const bounds = getAnchorWindow("30", anchors.oneMonthStart);
+    startBoundary = bounds.startBoundary;
+    endBoundary = bounds.endBoundary;
   } else if (filter === "365" && anchors.oneYearStart) {
-    startBoundary = new Date(anchors.oneYearStart + "-01");
-    endBoundary = new Date(startBoundary);
-    endBoundary.setFullYear(endBoundary.getFullYear() + 1);
-    endBoundary.setDate(endBoundary.getDate() - 1);
+    const bounds = getAnchorWindow("365", anchors.oneYearStart);
+    startBoundary = bounds.startBoundary;
+    endBoundary = bounds.endBoundary;
   } else {
     const daysToLookBack = parseInt(filter);
     endBoundary = today;
@@ -1480,7 +1542,7 @@ function renderChart(dailyDetailed, history) {
 
     if (timeframe === "365") {
       if (anchors.oneYearStart) {
-        let start = new Date(anchors.oneYearStart + "-01");
+        let start = getAnchorWindow("365", anchors.oneYearStart).startBoundary;
         for (let i = 0; i < 12; i++) {
           let d = new Date(start);
           d.setMonth(d.getMonth() + i);
@@ -1503,7 +1565,7 @@ function renderChart(dailyDetailed, history) {
     } else {
       let days = parseInt(timeframe);
       if (timeframe === "7" && anchors.sevenDayStart) {
-        let start = new Date(anchors.sevenDayStart);
+        let start = getAnchorWindow("7", anchors.sevenDayStart).startBoundary;
         for (let i = 0; i < 7; i++) {
           let d = new Date(start);
           d.setDate(d.getDate() + i);
@@ -1513,7 +1575,7 @@ function renderChart(dailyDetailed, history) {
         document.getElementById("chartTitle").textContent =
           "7-Day Trends (Custom)";
       } else if (timeframe === "30" && anchors.oneMonthStart) {
-        let start = new Date(anchors.oneMonthStart);
+        let start = getAnchorWindow("30", anchors.oneMonthStart).startBoundary;
         for (let i = 0; i < 30; i++) {
           let d = new Date(start);
           d.setDate(d.getDate() + i);
@@ -1547,7 +1609,7 @@ function renderChart(dailyDetailed, history) {
     Physics: { border: "#3b82f6", bg: "rgba(59, 130, 246, 0.1)" },
     Chemistry: { border: "#10b981", bg: "rgba(16, 185, 129, 0.1)" },
     "Combined Maths": { border: "#f59e0b", bg: "rgba(245, 158, 11, 0.1)" },
-    "English": { border: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
+    English: { border: "#8b5cf6", bg: "rgba(139, 92, 246, 0.1)" },
     "General Knowledge": { border: "#06b6d4", bg: "rgba(6, 182, 212, 0.1)" },
   };
 
@@ -1873,7 +1935,9 @@ document.addEventListener("visibilitychange", () => {
     checkCooldownState();
 
     if (activeSession && isRunning) {
-      const backgroundElapsed = Math.floor((Date.now() - activeSession.startTime) / 1000);
+      const backgroundElapsed = Math.floor(
+        (Date.now() - activeSession.startTime) / 1000,
+      );
       if (backgroundElapsed >= 5400) {
         // Handle pitstop state calculation if reached while minimized
         currentSubject = activeSession.subject;
@@ -1884,7 +1948,9 @@ document.addEventListener("visibilitychange", () => {
         runPitstopVocalAlert();
         endSession(5400);
         triggerPitstopCooldown();
-        alert("Session reached the 90-minute limit and was deployed! Time to pitstop.");
+        alert(
+          "Session reached the 90-minute limit and was deployed! Time to pitstop.",
+        );
         return;
       }
       startTimerLoop(activeSession.startTime);
