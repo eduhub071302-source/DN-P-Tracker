@@ -146,7 +146,7 @@ main.dashboard {
   flex: 1;
   padding: 30px 40px;
   overflow-y: auto;
-  overflow-x: auto;
+  overflow-x: hidden; /* Fix for horizontal layout breaking */
   cursor: grab;
 }
 .grabbing-cursor {
@@ -216,12 +216,13 @@ main.dashboard {
 
 .main-grid {
   display: grid;
-  grid-template-columns: 1fr 1.5fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); /* Dynamic resizing fix */
   gap: 30px;
   transition: grid-template-columns 0.3s ease;
+  width: 100%;
 }
 .main-grid.session-collapsed {
-  grid-template-columns: min-content 1fr;
+  grid-template-columns: min-content minmax(0, 1fr); /* Dynamic resizing fix */
 }
 .card.glass {
   background: var(--glass-bg);
@@ -229,6 +230,7 @@ main.dashboard {
   border: 1px solid var(--glass-border);
   border-radius: 20px;
   padding: 30px;
+  min-width: 0; /* Prevents text/charts from expanding the grid */
 }
 .card h3 {
   margin-bottom: 20px;
