@@ -228,6 +228,14 @@ let customHistoricalDates = null;
 let currentSessionNotes = [];
 let deferredPrompt; // For PWA installation
 
+// --- Date Helper Function ---
+function getLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 document.getElementById("currentDate").textContent =
   new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -1389,7 +1397,7 @@ function saveSession(subject, topic, timeInSeconds, notesArray) {
   localStorage.setItem("dnp_history", JSON.stringify(history));
 
   let dailyData = JSON.parse(localStorage.getItem("dnp_daily")) || {};
-  let today = new Date().toISOString().split("T")[0];
+  let today = getLocalDateString(new Date());
   if (!dailyData[today]) dailyData[today] = 0;
   dailyData[today] += timeInSeconds;
   localStorage.setItem("dnp_daily", JSON.stringify(dailyData));
@@ -1420,7 +1428,7 @@ function saveSession(subject, topic, timeInSeconds, notesArray) {
   if (lastDate !== today) {
     let yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    let yesterdayStr = yesterday.toISOString().split("T")[0];
+    let yesterdayStr = getLocalDateString(yesterday);
     if (lastDate === yesterdayStr) streak++;
     else if (lastDate !== today) streak = 1;
     localStorage.setItem("dnp_lastDate", today);
@@ -1472,7 +1480,8 @@ function getFilteredTotalSeconds() {
   }
 
   for (let dateStr in dailyData) {
-    const d = new Date(dateStr);
+    let [y, m, d_day] = dateStr.split("-");
+    const d = new Date(y, m - 1, d_day);
     d.setHours(0, 0, 0, 0);
     if (d >= startBoundary && d <= endBoundary) {
       totalSecs += dailyData[dateStr];
@@ -1487,7 +1496,7 @@ function updateDashboardUI() {
   let dailyDetailed =
     JSON.parse(localStorage.getItem("dnp_daily_detailed")) || {};
   let streak = localStorage.getItem("dnp_streak") || 0;
-  let today = new Date().toISOString().split("T")[0];
+  let today = getLocalDateString(new Date());
 
   let totalSecs = getFilteredTotalSeconds();
 
@@ -1528,7 +1537,8 @@ function renderChart(dailyDetailed, history) {
   if (customHistoricalDates) {
     customHistoricalDates.sort().forEach((dateStr) => {
       dateKeys.push(dateStr);
-      let d = new Date(dateStr);
+      let [y, m, d_day] = dateStr.split("-");
+      let d = new Date(y, m - 1, d_day);
       labels.push(
         d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       );
@@ -1546,7 +1556,7 @@ function renderChart(dailyDetailed, history) {
         for (let i = 0; i < 12; i++) {
           let d = new Date(start);
           d.setMonth(d.getMonth() + i);
-          let monthKey = d.toISOString().slice(0, 7);
+          let monthKey = getLocalDateString(d).slice(0, 7);
           dateKeys.push(monthKey);
           labels.push(d.toLocaleDateString("en-US", { month: "short" }));
         }
@@ -1556,7 +1566,7 @@ function renderChart(dailyDetailed, history) {
         for (let i = 11; i >= 0; i--) {
           let d = new Date();
           d.setMonth(d.getMonth() - i);
-          let monthKey = d.toISOString().slice(0, 7);
+          let monthKey = getLocalDateString(d).slice(0, 7);
           dateKeys.push(monthKey);
           labels.push(d.toLocaleDateString("en-US", { month: "short" }));
         }
@@ -1569,7 +1579,7 @@ function renderChart(dailyDetailed, history) {
         for (let i = 0; i < 7; i++) {
           let d = new Date(start);
           d.setDate(d.getDate() + i);
-          dateKeys.push(d.toISOString().split("T")[0]);
+          dateKeys.push(getLocalDateString(d));
           labels.push(d.toLocaleDateString("en-US", { weekday: "short" }));
         }
         document.getElementById("chartTitle").textContent =
@@ -1579,7 +1589,7 @@ function renderChart(dailyDetailed, history) {
         for (let i = 0; i < 30; i++) {
           let d = new Date(start);
           d.setDate(d.getDate() + i);
-          dateKeys.push(d.toISOString().split("T")[0]);
+          dateKeys.push(getLocalDateString(d));
           labels.push(
             d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
           );
@@ -1590,7 +1600,7 @@ function renderChart(dailyDetailed, history) {
         for (let i = days - 1; i >= 0; i--) {
           let d = new Date();
           d.setDate(d.getDate() - i);
-          let dateStr = d.toISOString().split("T")[0];
+          let dateStr = getLocalDateString(d);
           dateKeys.push(dateStr);
           let format =
             days === 7
@@ -1693,7 +1703,8 @@ function showDailyDetails(dateStr) {
   const dayData = dailyDetailed[dateStr];
 
   panel.classList.remove("hidden");
-  const niceDate = new Date(dateStr).toLocaleDateString("en-US", {
+  let [y, m, d_day] = dateStr.split("-");
+  const niceDate = new Date(y, m - 1, d_day).toLocaleDateString("en-US", {
     weekday: "long",
     month: "short",
     day: "numeric",
@@ -1871,7 +1882,8 @@ function getHistoryTree() {
   Object.keys(detailed)
     .sort()
     .forEach((dateStr) => {
-      const d = new Date(dateStr);
+      let [y, m, d_day] = dateStr.split("-");
+      const d = new Date(y, m - 1, d_day);
       const year = d.getFullYear(),
         month = d.toLocaleString("default", { month: "long" });
       const weekStr = `Week ${Math.ceil(d.getDate() / 7)}`;
